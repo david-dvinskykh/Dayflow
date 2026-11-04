@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   dmg:
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 60
     env:
       DERIVED_DATA: ${{ github.workspace }}/build
