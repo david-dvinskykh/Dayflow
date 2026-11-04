@@ -22,6 +22,11 @@ set -euo pipefail
 #   ASC_KEY_ID       - App Store Connect API key ID (optional)
 #   ASC_ISSUER_ID    - App Store Connect Issuer ID (optional)
 #   ASC_P8_PATH      - Path to .p8 private key (optional)
+#   CREATE_DMG_EXTRA_ARGS - Extra args for create-dmg, space separated (e.g. "--skip-jenkins" on headless CI)
+#   ALLOW_MISSING_BACKEND_URL - Set to 1 to build without DAYFLOW_BACKEND_URL (fork / CI builds)
+#
+# SIGN_ID="-" produces an ad-hoc signed build (no Developer ID needed). It runs
+# locally after removing quarantine, but cannot be notarized.
 
 # Load optional per-developer config
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -110,6 +115,13 @@ if [[ -z "${SIGN_ID}" ]]; then
   exit 1
 fi
 echo "Using signing identity: ${SIGN_ID}"
+# Secure timestamps need a real identity; ad-hoc signing must skip them.
+TIMESTAMP_ARGS=(--timestamp)
+if [[ "${SIGN_ID}" == "-" ]]; then
+  TIMESTAMP_ARGS=()
+  echo "Ad-hoc signing: secure timestamp and notarization will be skipped."
+  NO_NOTARIZE=1
+fi
 
 echo "[4/8] Creating sanitized copy for signing…"
 rm -rf "${SANITIZED_DIR}"
@@ -180,12 +192,17 @@ if [[ -n "${SENTRY_ENV:-}" ]]; then
     >/dev/null 2>&1 || /usr/libexec/PlistBuddy -c "Add :SentryEnvironment string ${SENTRY_ENV}" "${SANITIZED_APP}/Contents/Info.plist"
 fi
 if [[ -z "${DAYFLOW_BACKEND_URL:-}" ]]; then
-  echo "ERROR: DAYFLOW_BACKEND_URL must be set before building a release DMG." >&2
-  exit 1
+  if [[ "${ALLOW_MISSING_BACKEND_URL:-0}" == "1" ]]; then
+    echo "WARNING: DAYFLOW_BACKEND_URL not set; building without a Dayflow backend URL." >&2
+  else
+    echo "ERROR: DAYFLOW_BACKEND_URL must be set before building a release DMG." >&2
+    exit 1
+  fi
+else
+  RESOLVED_DAYFLOW_BACKEND_URL="${DAYFLOW_BACKEND_URL}"
+  /usr/libexec/PlistBuddy -c "Set :DayflowBackendURL ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist" \
+    >/dev/null 2>&1 || /usr/libexec/PlistBuddy -c "Add :DayflowBackendURL string ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist"
 fi
-RESOLVED_DAYFLOW_BACKEND_URL="${DAYFLOW_BACKEND_URL}"
-/usr/libexec/PlistBuddy -c "Set :DayflowBackendURL ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist" \
-  >/dev/null 2>&1 || /usr/libexec/PlistBuddy -c "Add :DayflowBackendURL string ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist"
 
 # Resolve $(PRODUCT_BUNDLE_IDENTIFIER) in entitlements before codesigning
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${SANITIZED_APP}/Contents/Info.plist" 2>/dev/null || true)
@@ -205,7 +222,7 @@ fi
 # It's a plain hardened-runtime binary with no entitlements of its own.
 CLI_BINARY="${SANITIZED_APP}/Contents/Helpers/dayflow"
 if [[ -f "${CLI_BINARY}" ]]; then
-  codesign -vvv --force -o runtime --timestamp --sign "${SIGN_ID}" "${CLI_BINARY}"
+  codesign -vvv --force -o runtime ${TIMESTAMP_ARGS[@]+"${TIMESTAMP_ARGS[@]}"} --sign "${SIGN_ID}" "${CLI_BINARY}"
 else
   echo "WARNING: bundled dayflow CLI not found at ${CLI_BINARY}." >&2
   echo "         The 'Embed Dayflow CLI' build phase may not have run." >&2
@@ -214,7 +231,7 @@ fi
 # Now sign the top-level app bundle (no --deep), using resolved entitlements
 codesign -vvv --force --strict \
   --options runtime \
-  --timestamp \
+  ${TIMESTAMP_ARGS[@]+"${TIMESTAMP_ARGS[@]}"} \
   --entitlements "${RESOLVED_ENTS}" \
   --sign "${SIGN_ID}" \
   "${SANITIZED_APP}"
@@ -266,6 +283,9 @@ fi
 
 rm -f "${DMG_NAME}"
 
+# shellcheck disable=SC2206
+EXTRA_DMG_ARGS=(${CREATE_DMG_EXTRA_ARGS:-})
+
 # Window size and positions tuned for docs/assets/dmg-background.png (1550×960 @2x, displays as 775×480)
 # Dayflow app on left, Applications folder on right (swapped from typical layout)
 create-dmg \
@@ -276,6 +296,7 @@ create-dmg \
   --icon "${APP_NAME}.app" 200 270 \
   --app-drop-link 575 270 \
   --no-internet-enable \
+  ${EXTRA_DMG_ARGS[@]+"${EXTRA_DMG_ARGS[@]}"} \
   "${DMG_NAME}" \
   "${SANITIZED_APP}"
 

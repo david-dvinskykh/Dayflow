@@ -1,0 +1,152 @@
+name: Build DMG
+
+# Builds Dayflow.app and packages it into a DMG using scripts/release_dmg.sh.
+#
+# Without signing secrets the app is ad-hoc signed (works on your own Mac after
+# removing quarantine, see the job summary). With the optional secrets below it
+# is signed with a Developer ID and, if notarization secrets are present,
+# notarized and stapled.
+#
+# Optional repository secrets:
+#   MACOS_CERT_P12_BASE64   base64 of a "Developer ID Application" .p12 export
+#   MACOS_CERT_PASSWORD     password of that .p12
+#   MACOS_SIGN_ID           identity name; auto-detected from the .p12 if empty
+#   ASC_KEY_ID / ASC_ISSUER_ID / ASC_P8_BASE64   App Store Connect API key for notarization
+#   POSTHOG_API_KEY, SENTRY_DSN                  injected into Info.plist if set
+# Optional repository variable:
+#   DAYFLOW_BACKEND_URL     backend URL baked into the app (build continues without it)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-dmg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DERIVED_DATA: ${{ github.workspace }}/build
+      DMG_NAME: Dayflow.dmg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/SourcePackages
+            tools/dayflow-cli/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('Dayflow/Dayflow.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'tools/dayflow-cli/Package.swift') }}
+
+      - name: Import Developer ID certificate
+        id: cert
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          SIGN_ID_SECRET: ${{ secrets.MACOS_SIGN_ID }}
+        run: |
+          if [[ -z "$P12_BASE64" ]]; then
+            echo "No certificate secret: building ad-hoc signed DMG."
+            echo "sign_id=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          SIGN_ID="$SIGN_ID_SECRET"
+          if [[ -z "$SIGN_ID" ]]; then
+            SIGN_ID=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F '"' '/Developer ID Application/ {print $2; exit}')
+          fi
+          if [[ -z "$SIGN_ID" ]]; then
+            echo "::error::No Developer ID Application identity found in the imported certificate."
+            exit 1
+          fi
+          echo "sign_id=$SIGN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare notarization key
+        env:
+          ASC_P8_BASE64: ${{ secrets.ASC_P8_BASE64 }}
+        run: |
+          if [[ -n "$ASC_P8_BASE64" ]]; then
+            echo "$ASC_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+            echo "ASC_P8_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build, sign and package DMG
+        env:
+          SIGN_ID: ${{ steps.cert.outputs.sign_id }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          DAYFLOW_BACKEND_URL: ${{ vars.DAYFLOW_BACKEND_URL }}
+          ALLOW_MISSING_BACKEND_URL: "1"
+          # Finder window styling via AppleScript hangs on headless runners.
+          CREATE_DMG_EXTRA_ARGS: --skip-jenkins
+        run: ./scripts/release_dmg.sh
+
+      - name: Name DMG after version
+        id: name
+        run: |
+          PLIST="$DERIVED_DATA/Build/Products/Release/Dayflow.app/Contents/Info.plist"
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")
+          SUFFIX=""
+          [[ "${{ steps.cert.outputs.sign_id }}" == "-" ]] && SUFFIX="-adhoc"
+          OUT="Dayflow-${VERSION}-${BUILD}${SUFFIX}.dmg"
+          mv "$DMG_NAME" "$OUT"
+          shasum -a 256 "$OUT" | tee "$OUT.sha256"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          {
+            echo "### $OUT"
+            if [[ -n "$SUFFIX" ]]; then
+              echo "Ad-hoc signed, not notarized. After copying to /Applications run:"
+              echo '```'
+              echo "xattr -dr com.apple.quarantine /Applications/Dayflow.app"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.file }}
+          path: |
+            ${{ steps.name.outputs.file }}
+            ${{ steps.name.outputs.file }}.sha256
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.name.outputs.file }}
+            ${{ steps.name.outputs.file }}.sha256
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
