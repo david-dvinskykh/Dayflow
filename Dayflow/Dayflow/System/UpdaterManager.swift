@@ -13,6 +13,11 @@ import Sparkle
 final class UpdaterManager: NSObject, ObservableObject {
   static let shared = UpdaterManager()
 
+  /// Builds packaged with DISABLE_UPDATES=1 (fork CI builds) set this key and
+  /// ship without a feed URL, so Sparkle never starts or checks for updates.
+  nonisolated static let updatesDisabled =
+    Bundle.main.object(forInfoDictionaryKey: "DayflowUpdatesDisabled") as? Bool ?? false
+
   private let userDriver = SilentUserDriver()
   private lazy var updater: SPUUpdater = {
     SPUUpdater(
@@ -41,6 +46,11 @@ final class UpdaterManager: NSObject, ObservableObject {
   private override init() {
     super.init()
 
+    if Self.updatesDisabled {
+      print("[Sparkle] Updates disabled for this build; updater not started")
+      return
+    }
+
     // Print what Sparkle thinks the settings are *before* starting:
     print("[Sparkle] bundleId=\(Bundle.main.bundleIdentifier ?? "nil")")
     print(
@@ -63,6 +73,7 @@ final class UpdaterManager: NSObject, ObservableObject {
   }
 
   func checkForUpdates(showUI: Bool = false) {
+    guard !Self.updatesDisabled else { return }
     isChecking = true
     statusText = "Checking…"
     track(

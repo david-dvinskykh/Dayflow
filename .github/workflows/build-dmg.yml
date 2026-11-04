@@ -105,6 +105,8 @@ jobs:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           DAYFLOW_BACKEND_URL: ${{ vars.DAYFLOW_BACKEND_URL }}
           ALLOW_MISSING_BACKEND_URL: "1"
+          # Fork builds must not pull updates from the upstream appcast.
+          DISABLE_UPDATES: "1"
           # Finder window styling via AppleScript hangs on headless runners.
           CREATE_DMG_EXTRA_ARGS: --skip-jenkins
         run: ./scripts/release_dmg.sh

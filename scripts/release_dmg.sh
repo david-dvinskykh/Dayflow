@@ -24,6 +24,7 @@ set -euo pipefail
 #   ASC_P8_PATH      - Path to .p8 private key (optional)
 #   CREATE_DMG_EXTRA_ARGS - Extra args for create-dmg, space separated (e.g. "--skip-jenkins" on headless CI)
 #   ALLOW_MISSING_BACKEND_URL - Set to 1 to build without DAYFLOW_BACKEND_URL (fork / CI builds)
+#   DISABLE_UPDATES  - Set to 1 to ship without Sparkle updates (no feed URL, no checks, menu item hidden)
 #
 # SIGN_ID="-" produces an ad-hoc signed build (no Developer ID needed). It runs
 # locally after removing quarantine, but cannot be notarized.
@@ -202,6 +203,20 @@ else
   RESOLVED_DAYFLOW_BACKEND_URL="${DAYFLOW_BACKEND_URL}"
   /usr/libexec/PlistBuddy -c "Set :DayflowBackendURL ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist" \
     >/dev/null 2>&1 || /usr/libexec/PlistBuddy -c "Add :DayflowBackendURL string ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist"
+fi
+
+if [[ "${DISABLE_UPDATES:-0}" == "1" ]]; then
+  echo "Disabling Sparkle updates in this build…"
+  INFO_PLIST="${SANITIZED_APP}/Contents/Info.plist"
+  for key in SUFeedURL SUPublicEDKey SUScheduledCheckInterval; do
+    /usr/libexec/PlistBuddy -c "Delete :${key}" "${INFO_PLIST}" >/dev/null 2>&1 || true
+  done
+  for key in SUEnableAutomaticChecks SUAutomaticallyUpdate SUAllowsAutomaticUpdates; do
+    /usr/libexec/PlistBuddy -c "Set :${key} false" "${INFO_PLIST}" >/dev/null 2>&1 \
+      || /usr/libexec/PlistBuddy -c "Add :${key} bool false" "${INFO_PLIST}"
+  done
+  /usr/libexec/PlistBuddy -c "Set :DayflowUpdatesDisabled true" "${INFO_PLIST}" >/dev/null 2>&1 \
+    || /usr/libexec/PlistBuddy -c "Add :DayflowUpdatesDisabled bool true" "${INFO_PLIST}"
 fi
 
 # Resolve $(PRODUCT_BUNDLE_IDENTIFIER) in entitlements before codesigning

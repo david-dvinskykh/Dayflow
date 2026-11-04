@@ -178,7 +178,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     menu.addItem(
       actionItem(String(localized: "Open Dayflow"), #selector(openDayflow), symbol: "macwindow"))
     menu.addItem(actionItem(String(localized: "Open Recordings"), #selector(openRecordingsFolder)))
-    menu.addItem(actionItem(String(localized: "Check for Updates"), #selector(checkForUpdates)))
+    if !UpdaterManager.updatesDisabled {
+      menu.addItem(actionItem(String(localized: "Check for Updates"), #selector(checkForUpdates)))
+    }
     menu.addItem(.separator())
     menu.addItem(
       actionItem(
