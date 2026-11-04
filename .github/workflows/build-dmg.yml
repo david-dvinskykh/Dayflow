@@ -21,6 +21,12 @@ on:
   push:
     tags:
       - "v*"
+    # Also rebuild when the build pipeline itself changes, on any branch.
+    branches:
+      - "**"
+    paths:
+      - ".github/workflows/build-dmg.yml"
+      - "scripts/release_dmg.sh"
 
 permissions:
   contents: write
