@@ -27,7 +27,10 @@ set -euo pipefail
 #   DISABLE_UPDATES  - Set to 1 to ship without Sparkle updates (no feed URL, no checks, menu item hidden)
 #
 # SIGN_ID="-" produces an ad-hoc signed build (no Developer ID needed). It runs
-# locally after removing quarantine, but cannot be notarized.
+# locally after removing quarantine, but cannot be notarized, and macOS forgets
+# its Screen Recording permission after every rebuild. A self-signed identity
+# from scripts/create_local_signing_cert.sh (SIGN_ID="Dayflow Local Signing")
+# keeps the signature stable across rebuilds, so the permission stays.
 
 # Load optional per-developer config
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -119,13 +122,19 @@ echo "Using signing identity: ${SIGN_ID}"
 # Secure timestamps need a real identity; ad-hoc signing must skip them.
 TIMESTAMP_ARGS=(--timestamp)
 # Hardened runtime enforces library validation: every loaded framework must
-# carry the app's Team ID. Ad-hoc signatures have none, so an ad-hoc app with
-# the hardened runtime is killed by dyld at launch. Only use it with a real ID.
+# carry the app's Team ID. Ad-hoc and self-signed certificates have none, so
+# such an app with the hardened runtime is killed by dyld at launch. Only Apple
+# Developer ID builds get it (and the secure timestamp and notarization).
 RUNTIME_ARGS=(-o runtime)
 if [[ "${SIGN_ID}" == "-" ]]; then
   TIMESTAMP_ARGS=()
   RUNTIME_ARGS=()
   echo "Ad-hoc signing: secure timestamp and notarization will be skipped."
+  NO_NOTARIZE=1
+elif [[ "${SIGN_ID}" != "Developer ID Application:"* ]]; then
+  TIMESTAMP_ARGS=()
+  RUNTIME_ARGS=()
+  echo "Local certificate signing: hardened runtime, timestamp and notarization will be skipped."
   NO_NOTARIZE=1
 fi
 
