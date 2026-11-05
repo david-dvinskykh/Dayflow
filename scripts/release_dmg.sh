@@ -118,8 +118,13 @@ fi
 echo "Using signing identity: ${SIGN_ID}"
 # Secure timestamps need a real identity; ad-hoc signing must skip them.
 TIMESTAMP_ARGS=(--timestamp)
+# Hardened runtime enforces library validation: every loaded framework must
+# carry the app's Team ID. Ad-hoc signatures have none, so an ad-hoc app with
+# the hardened runtime is killed by dyld at launch. Only use it with a real ID.
+RUNTIME_ARGS=(-o runtime)
 if [[ "${SIGN_ID}" == "-" ]]; then
   TIMESTAMP_ARGS=()
+  RUNTIME_ARGS=()
   echo "Ad-hoc signing: secure timestamp and notarization will be skipped."
   NO_NOTARIZE=1
 fi
@@ -142,26 +147,26 @@ fi
 SPARKLE_DIR="${SANITIZED_APP}/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ -d "${SPARKLE_DIR}" ]]; then
   if [[ -d "${SPARKLE_DIR}/XPCServices/Installer.xpc" ]]; then
-    codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/XPCServices/Installer.xpc"
   fi
   if [[ -d "${SPARKLE_DIR}/XPCServices/Downloader.xpc" ]]; then
     # Preserve the XPC's own entitlements
-    codesign -vvv --force -o runtime --preserve-metadata=entitlements --sign "${SIGN_ID}" \
+    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --preserve-metadata=entitlements --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/XPCServices/Downloader.xpc"
   fi
   if [[ -f "${SPARKLE_DIR}/Autoupdate" ]]; then
-    codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/Autoupdate"
   fi
   if [[ -d "${SPARKLE_DIR}/Updater.app" ]]; then
-    codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
       "${SPARKLE_DIR}/Updater.app"
   fi
   # Finally sign the framework container itself
-  codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
     "${SPARKLE_DIR}/../../Current" 2>/dev/null || \
-  codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
     "${SPARKLE_DIR}"
 fi
 
@@ -169,9 +174,9 @@ fi
 SENTRY_DIR="${SANITIZED_APP}/Contents/Frameworks/Sentry.framework"
 if [[ -d "${SENTRY_DIR}" ]]; then
   # Sign the versioned framework (handles both Current symlink and direct path)
-  codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
     "${SENTRY_DIR}/Versions/Current" 2>/dev/null || \
-  codesign -vvv --force -o runtime --sign "${SIGN_ID}" \
+  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
     "${SENTRY_DIR}"
 fi
 
@@ -237,7 +242,7 @@ fi
 # It's a plain hardened-runtime binary with no entitlements of its own.
 CLI_BINARY="${SANITIZED_APP}/Contents/Helpers/dayflow"
 if [[ -f "${CLI_BINARY}" ]]; then
-  codesign -vvv --force -o runtime ${TIMESTAMP_ARGS[@]+"${TIMESTAMP_ARGS[@]}"} --sign "${SIGN_ID}" "${CLI_BINARY}"
+  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} ${TIMESTAMP_ARGS[@]+"${TIMESTAMP_ARGS[@]}"} --sign "${SIGN_ID}" "${CLI_BINARY}"
 else
   echo "WARNING: bundled dayflow CLI not found at ${CLI_BINARY}." >&2
   echo "         The 'Embed Dayflow CLI' build phase may not have run." >&2
@@ -245,7 +250,7 @@ fi
 
 # Now sign the top-level app bundle (no --deep), using resolved entitlements
 codesign -vvv --force --strict \
-  --options runtime \
+  ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} \
   ${TIMESTAMP_ARGS[@]+"${TIMESTAMP_ARGS[@]}"} \
   --entitlements "${RESOLVED_ENTS}" \
   --sign "${SIGN_ID}" \
