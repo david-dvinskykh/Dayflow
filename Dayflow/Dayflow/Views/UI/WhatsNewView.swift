@@ -7,7 +7,6 @@
 
 import AppKit
 import SwiftUI
-import WebKit
 
 // MARK: - Release Notes Data Structure
 
@@ -194,8 +193,6 @@ struct WhatsNewView: View {
   @State private var agentsBetaResponseID = ""
   @State private var isSubmittingAgentsBeta = false
   @State private var agentsBetaErrorText: String?
-  @State private var tweetEmbedState: TweetEmbedState = .loading
-  @State private var tweetEmbedHeight: CGFloat = 0
   @State private var githubStarState: GitHubStarState = .checking
   /// What happened with the star prompt by the time the modal closes; sent on dismiss.
   @State private var githubStarOutcome = "check_pending"
@@ -207,12 +204,6 @@ struct WhatsNewView: View {
     case readyToStar
     case starring
     case starred
-  }
-
-  private enum TweetEmbedState {
-    case loading
-    case ready
-    case failed
   }
 
   private let bottomAnchorID = "whats_new_bottom_anchor"
@@ -690,76 +681,8 @@ struct WhatsNewView: View {
     .padding(.top, 6)
   }
 
-  /// Shows the live X embed, with the hand-drawn card as a fallback if the
-  /// widget can't load (offline, script blocked, or 10s timeout).
-  @ViewBuilder
   private func socialPreviewSection(_ preview: ReleaseNoteSocialPreview) -> some View {
-    // The live X embed loaded platform.twitter.com; this build shows the local card only.
-    if true {
-      socialPreviewCard(preview)
-    } else {
-      ZStack(alignment: .topLeading) {
-        TweetEmbedWebView(
-          tweetURL: preview.url,
-          onEvent: handleTweetEmbedEvent
-        )
-        .frame(height: tweetEmbedState == .ready ? tweetEmbedHeight : 220)
-        .opacity(tweetEmbedState == .ready ? 1 : 0)
-
-        if tweetEmbedState == .loading {
-          tweetEmbedPlaceholder
-        }
-      }
-      .animation(.easeInOut(duration: 0.25), value: tweetEmbedHeight)
-      .animation(.easeInOut(duration: 0.25), value: tweetEmbedState == .ready)
-      .task {
-        try? await Task.sleep(nanoseconds: 10_000_000_000)
-        if tweetEmbedState == .loading {
-          tweetEmbedState = .failed
-        }
-      }
-    }
-  }
-
-  private var tweetEmbedPlaceholder: some View {
-    RoundedRectangle(cornerRadius: 12, style: .continuous)
-      .fill(Color(red: 0.985, green: 0.982, blue: 0.972))
-      .overlay(
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .stroke(Color.black.opacity(0.08), lineWidth: 1)
-      )
-      .overlay(
-        ProgressView()
-          .controlSize(.small)
-      )
-      .frame(height: 220)
-  }
-
-  private func handleTweetEmbedEvent(_ event: TweetEmbedWebView.Event) {
-    switch event {
-    case .rendered(let height):
-      if height > 0 {
-        tweetEmbedHeight = height
-      }
-      tweetEmbedState = .ready
-    case .heightChanged(let height):
-      if tweetEmbedState == .ready && height > 0 {
-        tweetEmbedHeight = height
-      }
-    case .failed:
-      if tweetEmbedState != .ready {
-        tweetEmbedState = .failed
-      }
-    case .openLink(let url):
-      AnalyticsService.shared.capture(
-        "whats_new_social_preview_opened",
-        [
-          "version": releaseNote.version,
-          "preview_url": url.absoluteString,
-          "provider_label": currentProviderLabel,
-        ])
-      openURL(url)
-    }
+    socialPreviewCard(preview)
   }
 
   private func socialPreviewCard(_ preview: ReleaseNoteSocialPreview) -> some View {
@@ -1181,172 +1104,6 @@ private final class PlaceholderTextView: NSTextView {
   override func didChangeText() {
     super.didChangeText()
     needsDisplay = true
-  }
-}
-
-// MARK: - Tweet Embed
-
-/// Renders X's official embed widget for a single tweet and reports lifecycle
-/// events (rendered, height changes, failures, link clicks) back to SwiftUI.
-private struct TweetEmbedWebView: NSViewRepresentable {
-  enum Event {
-    case rendered(CGFloat)
-    case heightChanged(CGFloat)
-    case failed
-    case openLink(URL)
-  }
-
-  let tweetURL: String
-  let onEvent: (Event) -> Void
-
-  func makeCoordinator() -> Coordinator {
-    Coordinator(onEvent: onEvent)
-  }
-
-  func makeNSView(context: Context) -> WKWebView {
-    let configuration = WKWebViewConfiguration()
-    configuration.userContentController.add(context.coordinator, name: "embed")
-
-    let webView = WheelPassthroughWebView(frame: .zero, configuration: configuration)
-    webView.navigationDelegate = context.coordinator
-    webView.uiDelegate = context.coordinator
-    webView.loadHTMLString(
-      Self.embedHTML(tweetURL: tweetURL),
-      baseURL: URL(string: "https://twitter.com")
-    )
-    return webView
-  }
-
-  func updateNSView(_ nsView: WKWebView, context: Context) {}
-
-  static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
-    nsView.configuration.userContentController.removeScriptMessageHandler(forName: "embed")
-    nsView.navigationDelegate = nil
-    nsView.uiDelegate = nil
-  }
-
-  private static func embedHTML(tweetURL: String) -> String {
-    // widgets.js only reliably recognizes twitter.com URLs in the blockquote.
-    let normalizedURL = tweetURL.replacingOccurrences(
-      of: "://x.com/", with: "://twitter.com/")
-    return """
-      <!doctype html>
-      <html>
-      <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        html, body { margin: 0; padding: 0; background: #FFFFFF; overflow: hidden; }
-        .twitter-tweet { margin: 0 !important; }
-      </style>
-      </head>
-      <body>
-      <blockquote class="twitter-tweet" data-dnt="true" data-theme="light">
-        <a href="\(normalizedURL)"></a>
-      </blockquote>
-      <script>
-        function post(message) {
-          window.webkit.messageHandlers.embed.postMessage(message);
-        }
-        function reportFailure() {
-          post({ event: "failed" });
-        }
-        function onWidgetsLoaded() {
-          twttr.ready(function (twitter) {
-            twitter.events.bind("rendered", function () {
-              post({ event: "rendered", height: document.body.scrollHeight });
-            });
-          });
-        }
-        new ResizeObserver(function () {
-          post({ event: "height", height: document.body.scrollHeight });
-        }).observe(document.body);
-      </script>
-      <script src="https://platform.twitter.com/widgets.js"
-              onload="onWidgetsLoaded()" onerror="reportFailure()"></script>
-      </body>
-      </html>
-      """
-  }
-
-  final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
-    private let onEvent: (Event) -> Void
-
-    init(onEvent: @escaping (Event) -> Void) {
-      self.onEvent = onEvent
-    }
-
-    func userContentController(
-      _ userContentController: WKUserContentController,
-      didReceive message: WKScriptMessage
-    ) {
-      guard message.name == "embed",
-        let body = message.body as? [String: Any],
-        let event = body["event"] as? String
-      else { return }
-
-      let height = (body["height"] as? Double).map { CGFloat($0) } ?? 0
-
-      switch event {
-      case "rendered":
-        onEvent(.rendered(height))
-      case "height":
-        onEvent(.heightChanged(height))
-      case "failed":
-        onEvent(.failed)
-      default:
-        break
-      }
-    }
-
-    // Any link the user clicks inside the embed opens in the real browser.
-    func webView(
-      _ webView: WKWebView,
-      decidePolicyFor navigationAction: WKNavigationAction,
-      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
-    ) {
-      if navigationAction.navigationType == .linkActivated,
-        let url = navigationAction.request.url
-      {
-        decisionHandler(.cancel)
-        onEvent(.openLink(url))
-        return
-      }
-      decisionHandler(.allow)
-    }
-
-    // The widget's action buttons (like, repost) open popups — send those to
-    // the browser too instead of spawning a webview window.
-    func webView(
-      _ webView: WKWebView,
-      createWebViewWith configuration: WKWebViewConfiguration,
-      for navigationAction: WKNavigationAction,
-      windowFeatures: WKWindowFeatures
-    ) -> WKWebView? {
-      if let url = navigationAction.request.url {
-        onEvent(.openLink(url))
-      }
-      return nil
-    }
-
-    func webView(
-      _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
-      withError error: Error
-    ) {
-      onEvent(.failed)
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-      onEvent(.failed)
-    }
-  }
-}
-
-/// The embed never scrolls internally (its height always matches its content),
-/// so forward wheel events to the modal's ScrollView instead of swallowing them.
-private final class WheelPassthroughWebView: WKWebView {
-  override func scrollWheel(with event: NSEvent) {
-    nextResponder?.scrollWheel(with: event)
   }
 }
 

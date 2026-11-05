@@ -71,7 +71,7 @@ echo "[4/4] Checking codesign can use it…"
 if security find-identity -v -p codesigning | grep -F "\"${CERT_NAME}\""; then
   echo
   echo "Done. Build with:"
-  echo "  SIGN_ID=\"${CERT_NAME}\" DISABLE_UPDATES=1 ./scripts/release_dmg.sh"
+  echo "  SIGN_ID=\"${CERT_NAME}\" ./scripts/release_dmg.sh"
 else
   echo "ERROR: the certificate was imported but is not a valid code-signing identity." >&2
   security find-identity -v -p codesigning >&2 || true

@@ -23,7 +23,6 @@ set -euo pipefail
 #   ASC_ISSUER_ID    - App Store Connect Issuer ID (optional)
 #   ASC_P8_PATH      - Path to .p8 private key (optional)
 #   CREATE_DMG_EXTRA_ARGS - Extra args for create-dmg, space separated (e.g. "--skip-jenkins" on headless CI)
-#   DISABLE_UPDATES  - Set to 1 to ship without Sparkle updates (no feed URL, no checks, menu item hidden)
 #
 # SIGN_ID="-" produces an ad-hoc signed build (no Developer ID needed). It runs
 # locally after removing quarantine, but cannot be notarized, and macOS forgets
@@ -112,7 +111,7 @@ mkdir -p "${SANITIZED_DIR}"
 # Copy without extended attributes or resource forks
 ditto --noextattr --norsrc "${APP_PATH}" "${SANITIZED_APP}"
 
-echo "[5/8] Codesigning (no --deep, proper Sparkle helpers)…"
+echo "[5/8] Codesigning (no --deep)…"
 # Ensure any stray metadata is gone
 rm -f "${SANITIZED_APP}"/Icon? 2>/dev/null || true
 find -L "${SANITIZED_APP}" -name ".DS_Store" -delete || true
@@ -120,61 +119,9 @@ if command -v xattr >/dev/null 2>&1; then
   xattr -rc "${SANITIZED_APP}" 2>/dev/null || true
 fi
 
-# Re-sign Sparkle helpers first per Sparkle sandboxing guide
-SPARKLE_DIR="${SANITIZED_APP}/Contents/Frameworks/Sparkle.framework/Versions/B"
-if [[ -d "${SPARKLE_DIR}" ]]; then
-  if [[ -d "${SPARKLE_DIR}/XPCServices/Installer.xpc" ]]; then
-    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
-      "${SPARKLE_DIR}/XPCServices/Installer.xpc"
-  fi
-  if [[ -d "${SPARKLE_DIR}/XPCServices/Downloader.xpc" ]]; then
-    # Preserve the XPC's own entitlements
-    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --preserve-metadata=entitlements --sign "${SIGN_ID}" \
-      "${SPARKLE_DIR}/XPCServices/Downloader.xpc"
-  fi
-  if [[ -f "${SPARKLE_DIR}/Autoupdate" ]]; then
-    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
-      "${SPARKLE_DIR}/Autoupdate"
-  fi
-  if [[ -d "${SPARKLE_DIR}/Updater.app" ]]; then
-    codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
-      "${SPARKLE_DIR}/Updater.app"
-  fi
-  # Finally sign the framework container itself
-  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
-    "${SPARKLE_DIR}/../../Current" 2>/dev/null || \
-  codesign -vvv --force ${RUNTIME_ARGS[@]+"${RUNTIME_ARGS[@]}"} --sign "${SIGN_ID}" \
-    "${SPARKLE_DIR}"
-fi
-
-
-if [[ "${DISABLE_UPDATES:-0}" == "1" ]]; then
-  echo "Disabling Sparkle updates in this build…"
-  INFO_PLIST="${SANITIZED_APP}/Contents/Info.plist"
-  for key in SUFeedURL SUPublicEDKey SUScheduledCheckInterval; do
-    /usr/libexec/PlistBuddy -c "Delete :${key}" "${INFO_PLIST}" >/dev/null 2>&1 || true
-  done
-  for key in SUEnableAutomaticChecks SUAutomaticallyUpdate SUAllowsAutomaticUpdates; do
-    /usr/libexec/PlistBuddy -c "Set :${key} false" "${INFO_PLIST}" >/dev/null 2>&1 \
-      || /usr/libexec/PlistBuddy -c "Add :${key} bool false" "${INFO_PLIST}"
-  done
-  /usr/libexec/PlistBuddy -c "Set :DayflowUpdatesDisabled true" "${INFO_PLIST}" >/dev/null 2>&1 \
-    || /usr/libexec/PlistBuddy -c "Add :DayflowUpdatesDisabled bool true" "${INFO_PLIST}"
-fi
-
-# Resolve $(PRODUCT_BUNDLE_IDENTIFIER) in entitlements before codesigning
-BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${SANITIZED_APP}/Contents/Info.plist" 2>/dev/null || true)
+# Entitlements are used as-is (no Sparkle mach-lookup exceptions any more).
 RESOLVED_ENTS="${SANITIZED_DIR}/resolved.entitlements"
-if [[ -n "${BUNDLE_ID}" && -f "${ENTITLEMENTS}" ]]; then
-  cp "${ENTITLEMENTS}" "${RESOLVED_ENTS}"
-  # Force-set Sparkle's mach-lookup exceptions with the resolved bundle id
-  /usr/libexec/PlistBuddy -c "Delete :com.apple.security.temporary-exception.mach-lookup.global-name" "${RESOLVED_ENTS}" >/dev/null 2>&1 || true
-  /usr/libexec/PlistBuddy -c "Add :com.apple.security.temporary-exception.mach-lookup.global-name array" "${RESOLVED_ENTS}" >/dev/null 2>&1 || true
-  /usr/libexec/PlistBuddy -c "Add :com.apple.security.temporary-exception.mach-lookup.global-name:0 string ${BUNDLE_ID}-spks" "${RESOLVED_ENTS}" >/dev/null 2>&1 || true
-  /usr/libexec/PlistBuddy -c "Add :com.apple.security.temporary-exception.mach-lookup.global-name:1 string ${BUNDLE_ID}-spki" "${RESOLVED_ENTS}" >/dev/null 2>&1 || true
-else
-  cp "${ENTITLEMENTS}" "${RESOLVED_ENTS}"
-fi
+cp "${ENTITLEMENTS}" "${RESOLVED_ENTS}"
 
 # Sign the bundled dayflow CLI before the app container seals over it.
 # It's a plain hardened-runtime binary with no entitlements of its own.
@@ -194,26 +141,12 @@ codesign -vvv --force --strict \
   --sign "${SIGN_ID}" \
   "${SANITIZED_APP}"
 
-# Sanity check: ensure mach-lookup exceptions are present
-if command -v rg >/dev/null 2>&1; then
-  ENT_DUMP=$(codesign -dv --entitlements :- "${SANITIZED_APP}" 2>&1 || true)
-  if ! printf "%s" "$ENT_DUMP" | rg -q "com.apple.security.temporary-exception.mach-lookup.global-name"; then
-    echo "WARNING: mach-lookup entitlement missing on app. Check entitlements substitution." >&2
-  fi
-  if ! printf "%s" "$ENT_DUMP" | rg -q -e "-spks|teleportlabs.com.Dayflow-spks"; then
-    echo "WARNING: Sparkle status mach service (-spks) not present in entitlements." >&2
-  fi
-  if ! printf "%s" "$ENT_DUMP" | rg -q -e "-spki|teleportlabs.com.Dayflow-spki"; then
-    echo "WARNING: Sparkle installer mach service (-spki) not present in entitlements." >&2
-  fi
-fi
-
-# Without audio-input the hardened runtime denies the microphone silently and
-# Flow's voice planning fails for every user, so refuse to ship that.
+# The entitlements file declares audio-input; make sure it made it into the
+# signature (the hardened runtime would otherwise deny the microphone silently).
 SIGNED_ENTS="${SANITIZED_DIR}/signed.entitlements"
 codesign -d --entitlements "${SIGNED_ENTS}" --xml "${SANITIZED_APP}" 2>/dev/null || true
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "${SIGNED_ENTS}" 2>/dev/null)" != "true" ]]; then
-  echo "ERROR: com.apple.security.device.audio-input entitlement missing on app; Flow voice planning would fail." >&2
+  echo "ERROR: com.apple.security.device.audio-input entitlement missing on app." >&2
   exit 1
 fi
 

@@ -18,12 +18,5 @@
 	     unless this is present. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
-
-	<!-- Allow Sparkle's installer launcher XPC services to be looked up from sandbox -->
-	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
-	<array>
-		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spks</string>
-		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spki</string>
-	</array>
 </dict>
 </plist>

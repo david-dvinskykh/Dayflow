@@ -279,7 +279,6 @@ private struct ProviderSetupWrapper: Identifiable {
 struct SettingsView_Previews: PreviewProvider {
   static var previews: some View {
     SettingsView()
-      .environmentObject(UpdaterManager.shared)
       .frame(width: 1400, height: 860)
   }
 }

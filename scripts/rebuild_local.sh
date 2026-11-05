@@ -42,7 +42,7 @@ fi
 
 step "Building and signing (full log: ${LOG})"
 rm -f "${REPO_ROOT}/Dayflow.dmg" "${REPO_ROOT}"/rw.*.Dayflow.dmg
-if ! SIGN_ID="${CERT_NAME}" DISABLE_UPDATES=1 \
+if ! SIGN_ID="${CERT_NAME}" \
   CREATE_DMG_EXTRA_ARGS="--skip-jenkins" \
   "${REPO_ROOT}/scripts/release_dmg.sh" >"${LOG}" 2>&1; then
   grep -n "error:" "${LOG}" | head -20 >&2 || true

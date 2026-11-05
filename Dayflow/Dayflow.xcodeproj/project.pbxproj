@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		C4AD00032F0D00010000000C /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = C4AD00022F0D00010000000B /* MarkdownUI */; };
-		C4D74EB12E3608B5005E3CD7 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C4D74EB02E3608B5005E3CD7 /* Sparkle */; };
 		C4EBF0022DBDF82000FC5824 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = C4EBF0012DBDF82000FC5824 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -55,7 +54,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				C4EBF0022DBDF82000FC5824 /* GRDB in Frameworks */,
-				C4D74EB12E3608B5005E3CD7 /* Sparkle in Frameworks */,
 				C4AD00032F0D00010000000C /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -119,7 +117,6 @@
 			name = Dayflow;
 			packageProductDependencies = (
 				C4EBF0012DBDF82000FC5824 /* GRDB */,
-				C4D74EB02E3608B5005E3CD7 /* Sparkle */,
 				C4AD00022F0D00010000000B /* MarkdownUI */,
 			);
 			productName = Dayflow;
@@ -210,7 +207,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C4EBF0002DBDF82000FC5824 /* XCRemoteSwiftPackageReference "GRDB" */,
-				C4D74EAF2E3608B5005E3CD7 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				C4AD00012F0D00010000000A /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -617,14 +613,6 @@
 				minimumVersion = 2.4.1;
 			};
 		};
-		C4D74EAF2E3608B5005E3CD7 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.7.1;
-			};
-		};
 		C4EBF0002DBDF82000FC5824 /* XCRemoteSwiftPackageReference "GRDB" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
@@ -640,11 +628,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C4AD00012F0D00010000000A /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
 			productName = MarkdownUI;
-		};
-		C4D74EB02E3608B5005E3CD7 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = C4D74EAF2E3608B5005E3CD7 /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
 		};
 		C4EBF0012DBDF82000FC5824 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;

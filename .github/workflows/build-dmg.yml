@@ -104,8 +104,6 @@ jobs:
           SIGN_ID: ${{ steps.cert.outputs.sign_id }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          # Fork builds must not pull updates from the upstream appcast.
-          DISABLE_UPDATES: "1"
           # Finder window styling via AppleScript hangs on headless runners.
           CREATE_DMG_EXTRA_ARGS: --skip-jenkins
         run: ./scripts/release_dmg.sh

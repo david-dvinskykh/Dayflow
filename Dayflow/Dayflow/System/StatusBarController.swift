@@ -75,9 +75,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     menu.addItem(
       actionItem(String(localized: "Open Dayflow"), #selector(openDayflow), symbol: "macwindow"))
     menu.addItem(actionItem(String(localized: "Open Recordings"), #selector(openRecordingsFolder)))
-    if !UpdaterManager.updatesDisabled {
-      menu.addItem(actionItem(String(localized: "Check for Updates"), #selector(checkForUpdates)))
-    }
     menu.addItem(.separator())
     menu.addItem(
       actionItem(
@@ -157,11 +154,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
   @objc private func openRecordingsFolder() {
     NSWorkspace.shared.open(StorageManager.shared.recordingsRoot)
-  }
-
-  @objc private func checkForUpdates() {
-    UpdaterManager.shared.checkForUpdates(showUI: true)
-    NSApp.activate(ignoringOtherApps: true)
   }
 
   @objc private func quitDayflow() {

@@ -3,7 +3,6 @@
 //  Dayflow
 //
 
-import Sparkle
 import SwiftUI
 
 struct AppRootView: View {
@@ -172,9 +171,6 @@ struct DayflowApp: App {
     // UserDefaults.standard.set(false, forKey: "didOnboard")
   }
 
-  // Sparkle updater manager
-  private let updaterManager = UpdaterManager.shared
-
   var body: some Scene {
     Window("Dayflow", id: "main") {
       ZStack {
@@ -184,13 +180,11 @@ struct DayflowApp: App {
             // Show UI after onboarding
             AppRootView()
             .environmentObject(categoryStore)
-            .environmentObject(updaterManager)
           } else if !showVideoLaunch {
             // Onboarding is designed light-only.
             OnboardingFlow()
               .environmentObject(AppState.shared)
               .environmentObject(categoryStore)
-              .environmentObject(updaterManager)
               .dayflowTheme(.light)
           }
         }
@@ -297,12 +291,8 @@ struct DayflowApp: App {
         .keyboardShortcut("R", modifiers: [.command, .shift])
       }
 
-      // Add Sparkle's update menu item
+      // Release notes
       CommandGroup(after: .appInfo) {
-        Button("Check for Updates…") {
-          updaterManager.checkForUpdates(showUI: true)
-        }
-
         Button("View Release Notes") {
           // Activate the app and bring to foreground
           NSApp.activate(ignoringOtherApps: true)
