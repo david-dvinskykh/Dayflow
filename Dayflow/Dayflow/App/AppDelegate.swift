@@ -70,18 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
       if #available(macOS 15.0, *) { FlowDebugRecorder.shared.install() }
     #endif
 
-    // Configure crash reporting (Sentry) from shared telemetry preference.
-    SentryHelper.setEnabled(AnalyticsService.shared.isOptedIn)
-
-    // Configure analytics (prod only; default opt-in ON)
-    let info = Bundle.main.infoDictionary
-    let POSTHOG_API_KEY = info?["PHPostHogApiKey"] as? String ?? ""
-    let POSTHOG_HOST = info?["PHPostHogHost"] as? String ?? "https://us.i.posthog.com"
-    if !POSTHOG_API_KEY.isEmpty {
-      AnalyticsService.shared.start(apiKey: POSTHOG_API_KEY, host: POSTHOG_HOST)
-      analyticsConfigured = true
-      AgentUsageTelemetryQueue.drain()
-    }
+    // No crash reporting or analytics in this build: nothing leaves the Mac.
 
     // Read the user's shell environment in the background now, so the first Claude or Codex
     // run doesn't wait on a slow shell. Runs after analytics start so a failure gets reported.

@@ -93,10 +93,6 @@ struct SettingsOtherTabView: View {
           }
         }
 
-        SettingsRow(label: String(localized: "Share crash reports and anonymous usage data")) {
-          SettingsToggle(isOn: $viewModel.analyticsEnabled)
-        }
-
         SettingsRow(
           label: String(localized: "Show Dock icon"),
           subtitle: String(localized: "When off, Dayflow runs as a menu bar-only app.")

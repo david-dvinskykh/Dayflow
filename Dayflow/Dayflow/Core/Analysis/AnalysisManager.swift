@@ -9,7 +9,6 @@
 //
 import Foundation
 import GRDB
-import Sentry
 
 protocol AnalysisManaging {
   func startAnalysisJob()
@@ -584,14 +583,6 @@ final class AnalysisManager: AnalysisManaging {
       print("Idle shortcut fallback for batch \(batchId); continuing with normal LLM processing.")
     }
 
-    // Start performance tracking for batch processing
-    let transaction = SentryHelper.startTransaction(
-      name: "batch_processing",
-      operation: "llm.batch"
-    )
-    transaction?.setData(value: batchId, key: "batch_id")
-    transaction?.setData(value: itemCount, key: "screenshot_count")
-    transaction?.setData(value: totalDurationSeconds, key: "duration_s")
 
     // Add breadcrumb for batch processing start
     let breadcrumb = Breadcrumb(level: .info, category: "analysis")
@@ -624,8 +615,6 @@ final class AnalysisManager: AnalysisManaging {
           "LLM succeeded for Batch \(batchId). Processing \(activityCards.count) activity cards for day \(currentLogicalDayString)."
         )
 
-        // Finish performance transaction - LLM processing completed successfully
-        transaction?.finish(status: .ok)
 
         // Debug: Check for duplicate cards from LLM
         print("\n🔍 DEBUG: Checking for duplicate cards from LLM:")
@@ -658,8 +647,6 @@ final class AnalysisManager: AnalysisManaging {
           "LLM failed for Batch \(batchId). Day \(currentLogicalDayString) may have been cleared. Error: \(err.localizedDescription)"
         )
 
-        // Finish performance transaction - LLM processing failed
-        transaction?.finish(status: .internalError)
 
         self.markBatchFailed(batchId: batchId, reason: err.localizedDescription)
         completion?(.failure(err))

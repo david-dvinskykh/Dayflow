@@ -2,17 +2,12 @@
 //  AnalyticsService.swift
 //  Dayflow
 //
-//  Centralized analytics wrapper for PostHog. Provides
-//  - identity management via PostHog distinct ID
-//  - opt-in gate (default ON)
-//  - super properties and person properties
-//  - sampling and throttling helpers
-//  - safe, PII-free capture helpers and bucketing utils
+//  Former PostHog wrapper. Analytics are removed in this build: the API stays so
+//  call sites compile, but nothing is collected or sent.
 //
 
 import AppKit
 import Foundation
-import PostHog
 
 struct TelemetrySanitizedStdout: Equatable {
   let originalLength: Int
@@ -211,250 +206,48 @@ enum TelemetryErrorSanitizer {
   }
 }
 
+/// Analytics used to go to PostHog. This build keeps everything on the Mac: every method is
+/// a no-op (or a pure helper), so the many call sites stay as they are but nothing is sent.
 final class AnalyticsService {
   static let shared = AnalyticsService()
 
   private init() {}
 
-  private let optInKey = "analyticsOptIn"
-  private let backendAuthFallbackTokenKey = "localBackendAuthFallbackToken"
-  private let backendAuthOverrideTokenKey = "dayflowBackendAuthTokenOverride"
   private let throttleLock = NSLock()
   private var throttles: [String: Date] = [:]
 
+  /// Always off; there is no analytics backend.
   var isOptedIn: Bool {
-    get {
-      if UserDefaults.standard.object(forKey: optInKey) == nil {
-        // Default ON per product decision
-        return true
-      }
-      return UserDefaults.standard.bool(forKey: optInKey)
-    }
-    set {
-      UserDefaults.standard.set(newValue, forKey: optInKey)
-    }
+    get { false }
+    set {}
   }
 
-  func start(apiKey: String, host: String) {
-    let config = PostHogConfig(apiKey: apiKey, host: host)
-    let optedIn = isOptedIn
-    // Disable autocapture for privacy
-    config.captureApplicationLifecycleEvents = false
-    // Keep SDK initialized for backend auth token usage, but hard-disable networked telemetry when opted out.
-    config.optOut = !optedIn
-    config.preloadFeatureFlags = optedIn
-    config.remoteConfig = optedIn
-    PostHogSDK.shared.setup(config)
+  func start(apiKey: String, host: String) {}
 
-    guard optedIn else { return }
+  /// No backend account exists in this build.
+  func backendAuthToken() -> String { "" }
 
-    // Identity - run on background thread to avoid blocking app launch.
-    // Use PostHog's own distinct ID as the canonical identifier source.
-    Task.detached(priority: .utility) {
-      let id = PostHogSDK.shared.getDistinctId().trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !id.isEmpty else { return }
-      PostHogSDK.shared.identify(id)
-    }
+  func postHogDistinctIdForAppcast() -> String? { nil }
 
-    // Super properties at launch
-    registerInitialSuperProperties()
+  func currentDistinctId() -> String? { nil }
 
-    // Person properties via $set / $set_once
-    let set: [String: Any] = [
-      "analytics_opt_in": optedIn
-    ]
-    var payload: [String: Any] = ["$set": sanitize(set)]
-    if !UserDefaults.standard.bool(forKey: "installTsSent") {
-      payload["$set_once"] = ["install_ts": iso8601Now()]
-      UserDefaults.standard.set(true, forKey: "installTsSent")
-    }
-    PostHogSDK.shared.capture("person_props_updated", properties: payload)
-  }
+  func setOptIn(_ enabled: Bool) {}
 
-  /// Returns the stable PostHog distinct ID used as backend auth identity.
-  /// Source of truth is PostHog SDK storage (not keychain).
-  func backendAuthToken() -> String {
-    let defaults = UserDefaults.standard
-    #if DEBUG
-      if let override = defaults.string(forKey: backendAuthOverrideTokenKey)?
-        .trimmingCharacters(in: .whitespacesAndNewlines),
-        !override.isEmpty
-      {
-        // This override feeds the legacy Daily/PostHog auth path only.
-        // Dayflow account session tokens are intentionally ignored here; CardGen
-        // reads them through DayflowAuthManager instead.
-        if override.hasPrefix("dfs:") {
-          print(
-            "[AnalyticsService] backendAuthToken ignored_debug_override "
-              + "reason=dayflow_session_token length=\(override.count)"
-          )
-        } else {
-          print(
-            "[AnalyticsService] backendAuthToken source=debug_override_user_defaults "
-              + "length=\(override.count)"
-          )
-          return override
-        }
-      }
-    #endif
+  func capture(_ name: String, _ props: [String: Any] = [:]) {}
 
-    let distinctId = PostHogSDK.shared.getDistinctId().trimmingCharacters(
-      in: .whitespacesAndNewlines)
-    if !distinctId.isEmpty {
-      #if DEBUG
-        print(
-          "[AnalyticsService] backendAuthToken source=posthog_distinct_id "
-            + "length=\(distinctId.count)"
-        )
-      #endif
-      return distinctId
-    }
+  func flush() {}
 
-    #if DEBUG
-      // Local-dev fallback so backend-authenticated features still work when PostHog
-      // is not configured for the current build.
-      if let existing = defaults.string(forKey: backendAuthFallbackTokenKey)?
-        .trimmingCharacters(in: .whitespacesAndNewlines),
-        !existing.isEmpty
-      {
-        print(
-          "[AnalyticsService] backendAuthToken source=debug_fallback_existing "
-            + "length=\(existing.count)"
-        )
-        if existing.hasPrefix("local-") {
-          print(
-            "[AnalyticsService] backendAuthToken warning=fallback_token_looks_local "
-              + "length=\(existing.count)"
-          )
-        }
-        return existing
-      }
+  func featureFlagVariant(_ key: String) -> String? { nil }
 
-      let generated = "\(UUID().uuidString.lowercased())"
-      defaults.set(generated, forKey: backendAuthFallbackTokenKey)
-      print(
-        "[AnalyticsService] backendAuthToken source=debug_fallback_generated "
-          + "length=\(generated.count)"
-      )
-      return generated
-    #else
-      return ""
-    #endif
-  }
+  func screen(_ name: String, _ props: [String: Any] = [:]) {}
 
-  func postHogDistinctIdForAppcast() -> String? {
-    currentDistinctId()
-  }
+  func identify(_ distinctId: String, properties: [String: Any] = [:]) {}
 
-  /// The PostHog distinct ID, or nil when analytics are opted out or the SDK has no identity yet.
-  func currentDistinctId() -> String? {
-    guard isOptedIn else { return nil }
-    let distinctId = PostHogSDK.shared.getDistinctId().trimmingCharacters(
-      in: .whitespacesAndNewlines)
-    return distinctId.isEmpty ? nil : distinctId
-  }
+  func alias(_ aliasId: String) {}
 
-  func setOptIn(_ enabled: Bool) {
-    let previousValue = isOptedIn
-    isOptedIn = enabled
+  func registerSuperProperties(_ props: [String: Any]) {}
 
-    if enabled {
-      PostHogSDK.shared.optIn()
-      SentryHelper.setEnabled(true)
-      NotificationCenter.default.post(
-        name: .analyticsPreferenceChanged,
-        object: nil,
-        userInfo: ["enabled": enabled]
-      )
-
-      guard previousValue != enabled else { return }
-
-      let payload: [String: Any] = ["$set": sanitize(["analytics_opt_in": enabled])]
-      Task.detached(priority: .utility) {
-        PostHogSDK.shared.capture("person_props_updated", properties: payload)
-        PostHogSDK.shared.capture("analytics_opt_in_changed", properties: ["enabled": enabled])
-      }
-      return
-    }
-
-    guard previousValue != enabled else {
-      SentryHelper.setEnabled(false)
-      PostHogSDK.shared.optOut()
-      NotificationCenter.default.post(
-        name: .analyticsPreferenceChanged,
-        object: nil,
-        userInfo: ["enabled": enabled]
-      )
-      return
-    }
-
-    // Disable Sentry immediately, then send one final explicit PostHog opt-out signal.
-    SentryHelper.setEnabled(false)
-    let payload: [String: Any] = ["$set": sanitize(["analytics_opt_in": enabled])]
-    PostHogSDK.shared.capture("person_props_updated", properties: payload)
-    PostHogSDK.shared.capture("analytics_opt_in_changed", properties: ["enabled": enabled])
-    PostHogSDK.shared.flush()
-    PostHogSDK.shared.optOut()
-    NotificationCenter.default.post(
-      name: .analyticsPreferenceChanged,
-      object: nil,
-      userInfo: ["enabled": enabled]
-    )
-  }
-
-  func capture(_ name: String, _ props: [String: Any] = [:]) {
-    guard isOptedIn else { return }
-    let sanitized = sanitize(props)
-    PostHogSDK.shared.capture(name, properties: sanitized)
-  }
-
-  func flush() {
-    guard isOptedIn else { return }
-    PostHogSDK.shared.flush()
-  }
-
-  func featureFlagVariant(_ key: String) -> String? {
-    guard isOptedIn else { return nil }
-    return PostHogSDK.shared.getFeatureFlag(key) as? String
-  }
-
-  func screen(_ name: String, _ props: [String: Any] = [:]) {
-    // Implement as a regular capture for consistency
-    capture("screen_viewed", ["screen": name].merging(props, uniquingKeysWith: { _, new in new }))
-  }
-
-  func identify(_ distinctId: String, properties: [String: Any] = [:]) {
-    guard isOptedIn else { return }
-    Task.detached(priority: .utility) {
-      PostHogSDK.shared.identify(distinctId)
-    }
-    if !properties.isEmpty {
-      setPersonProperties(properties)
-    }
-  }
-
-  func alias(_ aliasId: String) {
-    guard isOptedIn else { return }
-    Task.detached(priority: .utility) {
-      PostHogSDK.shared.alias(aliasId)
-    }
-  }
-
-  func registerSuperProperties(_ props: [String: Any]) {
-    guard isOptedIn else { return }
-    let sanitized = sanitize(props)
-    Task.detached(priority: .utility) {
-      PostHogSDK.shared.register(sanitized)
-    }
-  }
-
-  func setPersonProperties(_ props: [String: Any]) {
-    guard isOptedIn else { return }
-    let payload: [String: Any] = ["$set": sanitize(props)]
-    Task.detached(priority: .utility) {
-      PostHogSDK.shared.capture("person_props_updated", properties: payload)
-    }
-  }
+  func setPersonProperties(_ props: [String: Any]) {}
 
   func throttled(_ key: String, minInterval: TimeInterval, action: () -> Void) {
     let now = Date()
@@ -545,55 +338,5 @@ final class AnalyticsService {
 
   func dayString(_ date: Date) -> String {
     Self.dayFormatter.string(from: date)
-  }
-
-  private func registerInitialSuperProperties() {
-    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-    let os = ProcessInfo.processInfo.operatingSystemVersion
-    let osVersion = "macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
-    let device = Host.current().localizedName ?? "Mac"
-    let locale = Locale.current.identifier
-    let tz = TimeZone.current.identifier
-
-    registerSuperProperties([
-      "app_version": version,
-      "build_number": build,
-      "os_version": osVersion,
-      "device_model": device,
-      "locale": locale,
-      // Locale.current reflects the app's supported localization, so it cannot
-      // tell us which languages users would prefer us to support next.
-      "preferred_language": Locale.preferredLanguages.first ?? "und",
-      "interface_language": Bundle.main.preferredLocalizations.first ?? "en",
-      "time_zone": tz,
-        // dynamic values will be updated later as needed
-    ])
-  }
-
-  private func sanitize(_ props: [String: Any]) -> [String: Any] {
-    // Drop known sensitive keys if ever passed by mistake
-    let blocked = Set([
-      "api_key", "token", "authorization", "file_path", "url", "window_title", "clipboard",
-      "screen_content",
-    ])
-    var out: [String: Any] = [:]
-    for (k, v) in props {
-      if blocked.contains(k) { continue }
-      // Only allow primitive JSON types
-      if v is String || v is Int || v is Double || v is Bool || v is NSNull {
-        out[k] = v
-      } else {
-        // Allow string coercion for simple enums
-        out[k] = String(describing: v)
-      }
-    }
-    return out
-  }
-
-  private func iso8601Now() -> String {
-    let fmt = ISO8601DateFormatter()
-    fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return fmt.string(from: Date())
   }
 }

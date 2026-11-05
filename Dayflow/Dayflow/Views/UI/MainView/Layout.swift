@@ -1,5 +1,4 @@
 import AppKit
-import Sentry
 import SwiftUI
 
 extension MainView {
@@ -201,15 +200,6 @@ extension MainView {
 
     let tabName = newIcon.analyticsTabName
     syncCurrentUIContext(selectedTab: newIcon)
-
-    SentryHelper.configureScope { scope in
-      scope.setContext(
-        value: [
-          "active_view": tabName,
-          "selected_date": dayString(selectedDate),
-          "is_recording": appState.isRecording,
-        ], key: "app_state")
-    }
 
     let navBreadcrumb = Breadcrumb(level: .info, category: "navigation")
     navBreadcrumb.message = "Navigated to \(tabName)"

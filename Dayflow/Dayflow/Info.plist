@@ -27,8 +27,6 @@
 	<string>Dayflow listens while you talk to Flow about your plan. Audio is only used for that conversation.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Dayflow uses screen access to create your timeline. Recordings stay on your Mac and you can pause or delete them anytime.</string>
-	<key>PHPostHogApiKey</key>
-	<string>$(POSTHOG_API_KEY)</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<true/>
 	<key>SUAutomaticallyUpdate</key>

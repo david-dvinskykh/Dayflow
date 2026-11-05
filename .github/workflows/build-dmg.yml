@@ -12,7 +12,6 @@ name: Build DMG
 #   MACOS_CERT_PASSWORD     password of that .p12
 #   MACOS_SIGN_ID           identity name; auto-detected from the .p12 if empty
 #   ASC_KEY_ID / ASC_ISSUER_ID / ASC_P8_BASE64   App Store Connect API key for notarization
-#   POSTHOG_API_KEY, SENTRY_DSN                  injected into Info.plist if set
 # Optional repository variable:
 #   DAYFLOW_BACKEND_URL     backend URL baked into the app (build continues without it)
 
@@ -107,8 +106,6 @@ jobs:
           SIGN_ID: ${{ steps.cert.outputs.sign_id }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           DAYFLOW_BACKEND_URL: ${{ vars.DAYFLOW_BACKEND_URL }}
           ALLOW_MISSING_BACKEND_URL: "1"
           # Fork builds must not pull updates from the upstream appcast.

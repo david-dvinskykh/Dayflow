@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import GRDB
-import Sentry
 
 extension StorageManager {
   private static let maxStoredLLMBodyCharacters = 64 * 1024
@@ -131,10 +130,7 @@ extension StorageManager {
   /// Tells the user the database is unavailable (most commonly a full disk) and
   /// quits cleanly instead of crashing.
   private static func showDatabaseUnavailableAlertAndQuit(error: Error) -> Never {
-    if SentryHelper.isEnabled {
-      SentrySDK.capture(message: "Database unavailable, quitting: \(error)")
-      SentrySDK.flush(timeout: 2)
-    }
+    print("[StorageManager] Database unavailable, quitting: \(error)")
 
     let presentAlert = {
       let alert = NSAlert()
