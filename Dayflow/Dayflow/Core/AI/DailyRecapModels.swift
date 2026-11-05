@@ -1,6 +1,8 @@
 import Foundation
 
 enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
+  /// Dayflow Pro's hosted recap. Removed in this build; the case stays only so recaps
+  /// saved by earlier versions still decode. It is never offered or generated.
   case dayflow
   case local
   case gemini
@@ -10,7 +12,6 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
 
   private static let storageKey = "dailyRecapProvider_v1"
   static let allCases: [DailyRecapProvider] = [
-    .dayflow,
     .claude,
     .chatgpt,
     .gemini,
@@ -20,7 +21,8 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
 
   static func load(from defaults: UserDefaults = .standard) -> DailyRecapProvider {
     if let rawValue = defaults.string(forKey: storageKey),
-      let provider = DailyRecapProvider(rawValue: rawValue)
+      let provider = DailyRecapProvider(rawValue: rawValue),
+      provider != .dayflow
     {
       return provider
     }
@@ -35,10 +37,6 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
   }
 
   private static func migrateInitialSelection(from defaults: UserDefaults) -> DailyRecapProvider {
-    if defaults.bool(forKey: "isDailyUnlocked") {
-      return .dayflow
-    }
-
     guard let providerID = (try? LLMProviderRoutingStore.load(from: defaults))?.primary else {
       return .none
     }
@@ -46,8 +44,6 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
     switch providerID {
     case .gemini:
       return .gemini
-    case .dayflow:
-      return .dayflow
     case .chatGPT:
       return .chatgpt
     case .claude:

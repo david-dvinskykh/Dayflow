@@ -10,7 +10,6 @@ import SwiftUI
 
 struct SettingsView: View {
   private enum SettingsTab: String, CaseIterable, Identifiable {
-    case account
     case storage
     case privacy
     case providers
@@ -22,7 +21,6 @@ struct SettingsView: View {
 
     var title: String {
       switch self {
-      case .account: return String(localized: "Account")
       case .storage: return String(localized: "Storage")
       case .privacy: return String(localized: "Privacy")
       case .providers: return String(localized: "Providers")
@@ -33,7 +31,7 @@ struct SettingsView: View {
     }
   }
 
-  @State private var selectedTab: SettingsTab = .account
+  @State private var selectedTab: SettingsTab = .providers
 
   @Namespace private var sidebarSelectionNamespace
 
@@ -104,7 +102,6 @@ struct SettingsView: View {
         .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
     }
     .onAppear {
-      DayflowAuthManager.shared.loadStoredSessionIfNeeded()
       providersViewModel.handleOnAppear()
       otherViewModel.refreshAnalyticsState()
       storageViewModel.refreshStorageIfNeeded(isStorageTab: selectedTab == .storage)
@@ -124,10 +121,11 @@ struct SettingsView: View {
         selectedTab = .providers
       }
     }
+    // There is no Account tab any more (Dayflow Pro was removed); land on Providers.
     .onReceive(NotificationCenter.default.publisher(for: .openAccountSettings)) { _ in
-      guard selectedTab != .account else { return }
+      guard selectedTab != .providers else { return }
       withAnimation(.easeOut(duration: 0.18)) {
-        selectedTab = .account
+        selectedTab = .providers
       }
     }
   }
@@ -253,8 +251,6 @@ struct SettingsView: View {
     // actually exist (the sidebar is vertical, not left/right tabs).
     Group {
       switch selectedTab {
-      case .account:
-        SettingsAccountSection()
       case .storage:
         SettingsStorageTabView(viewModel: storageViewModel)
       case .privacy:

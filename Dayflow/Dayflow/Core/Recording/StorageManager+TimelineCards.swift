@@ -373,10 +373,6 @@ extension StorageManager {
           "You successfully installed Dayflow with Ollama — your data stays 100% on your device. Come back in 30 minutes to see your first real activity card! ✨ (This is a sample card, so you can see what your timeline will look like.)"
       }
 
-    case .dayflow:
-      return
-        "You successfully installed Dayflow with Dayflow Pro. Come back in 30 minutes to see your first real activity card! ✨ (This is a sample card, so you can see what your timeline will look like.)"
-
     case .openAICompatible:
       return
         "You successfully installed Dayflow with your OpenAI-compatible provider. Come back in 30 minutes to see your first real activity card! ✨ (This is a sample card, so you can see what your timeline will look like.)"

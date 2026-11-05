@@ -163,7 +163,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
   }
 
   func handleOnAppear() {
-    DayflowAuthManager.shared.loadStoredSessionIfNeeded()
     loadRouting()
     reloadLocalProviderSettings()
     reloadOpenAICompatibleSettings()
@@ -357,11 +356,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
 
   func editProviderConfiguration(_ providerId: LLMProviderID) {
     guard providerCatalog.contains(where: { $0.id == providerId }) else { return }
-    if providerId == .dayflow {
-      openAccountForDayflowProvider(providerId)
-      return
-    }
-
     guard canUseProviderForRouting(providerId) else {
       openAccountForDayflowPro(providerId)
       return
@@ -391,8 +385,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
       let preference = GeminiModelPreference.load()
       selectedGeminiModel = preference.primary
       savedGeminiModel = preference.primary
-    case .dayflow:
-      break
     }
     let role = pendingSetupRole ?? .setupOnly
     let routingSucceeded: Bool
@@ -582,8 +574,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
 
   func isProviderConfigured(_ providerId: LLMProviderID) -> Bool {
     switch providerId {
-    case .dayflow:
-      return isDayflowProActive
     case .gemini:
       let key = KeychainManager.shared.retrieve(for: "gemini") ?? ""
       return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -642,46 +632,10 @@ final class ProvidersSettingsViewModel: ObservableObject {
     return providerDisplayName(backupProvider)
   }
 
-  var isDayflowProActive: Bool {
-    let entitlement = DayflowAuthManager.shared.entitlements
-    return entitlement.plan == "pro" && entitlement.status == "active"
-  }
+  /// Dayflow Pro was removed in this build: every listed provider can be routed.
+  private func canUseProviderForRouting(_ providerId: LLMProviderID) -> Bool { true }
 
-  func shouldShowDayflowUpgradeAction(for providerId: LLMProviderID) -> Bool {
-    providerId == .dayflow && !isDayflowProActive
-  }
-
-  func openDayflowUpgradeAccount(from providerId: LLMProviderID) {
-    openAccountForDayflowPro(providerId)
-  }
-
-  private func canUseProviderForRouting(_ providerId: LLMProviderID) -> Bool {
-    providerId != .dayflow || isDayflowProActive
-  }
-
-  private func openAccountForDayflowPro(_ providerId: LLMProviderID) {
-    guard providerId == .dayflow else { return }
-    upgradeStatusMessage = String(
-      localized: "Dayflow Pro is required for hosted cards and transcription.")
-    openAccountForDayflowProvider(providerId)
-  }
-
-  private func openAccountForDayflowProvider(_ providerId: LLMProviderID) {
-    guard providerId == .dayflow else { return }
-    if isDayflowProActive {
-      upgradeStatusMessage = String(localized: "Manage Dayflow Pro from Account.")
-    }
-    NotificationCenter.default.post(name: .openAccountSettings, object: nil)
-    AnalyticsService.shared.capture(
-      "dayflow_backend_provider_paywall_opened",
-      [
-        "provider": providerId.rawValue,
-        "provider_id": providerId.rawValue,
-        "is_signed_in": DayflowAuthManager.shared.isSignedIn,
-        "entitlement_plan": DayflowAuthManager.shared.entitlements.plan,
-        "entitlement_status": DayflowAuthManager.shared.entitlements.status,
-      ])
-  }
+  private func openAccountForDayflowPro(_ providerId: LLMProviderID) {}
 
   @discardableResult
   private func saveRouting(_ updatedRouting: LLMProviderRouting) -> Bool {
@@ -748,10 +702,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
   private var providerCatalog: [CompactProviderInfo] {
     [
       CompactProviderInfo(
-        id: .dayflow,
-        summary: String(localized: "Hosted cards & transcription • no API keys • requires Pro")
-      ),
-      CompactProviderInfo(
         id: .claude,
         summary: String(localized: "Uses Claude Code through your existing Claude plan")
       ),
@@ -804,9 +754,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
     case .openAICompatible:
       return openAICompatibleModelID.isEmpty
         ? String(localized: "OpenAI-compatible endpoint") : openAICompatibleModelID
-    case .dayflow:
-      return isDayflowProActive
-        ? String(localized: "Dayflow Pro active") : String(localized: "Requires Dayflow Pro")
     }
   }
 
@@ -843,8 +790,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
       return String(localized: "Cursor CLI")
     case .openAICompatible:
       return String(localized: "OpenAI-compatible API")
-    case .dayflow:
-      return String(localized: "Dayflow Backend")
     }
   }
 
@@ -856,7 +801,6 @@ final class ProvidersSettingsViewModel: ObservableObject {
     case .claude: return "Claude"
     case .cursor: return "Cursor"
     case .openAICompatible: return "OpenAI-compatible"
-    case .dayflow: return String(localized: "Dayflow Pro")
     }
   }
 
@@ -876,7 +820,6 @@ struct CompactProviderInfo: Identifiable {
     case .claude: return "Claude"
     case .cursor: return "Cursor"
     case .openAICompatible: return "OpenAI-compatible"
-    case .dayflow: return String(localized: "Dayflow Pro")
     }
   }
 }

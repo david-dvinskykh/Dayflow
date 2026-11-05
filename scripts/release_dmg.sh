@@ -23,7 +23,6 @@ set -euo pipefail
 #   ASC_ISSUER_ID    - App Store Connect Issuer ID (optional)
 #   ASC_P8_PATH      - Path to .p8 private key (optional)
 #   CREATE_DMG_EXTRA_ARGS - Extra args for create-dmg, space separated (e.g. "--skip-jenkins" on headless CI)
-#   ALLOW_MISSING_BACKEND_URL - Set to 1 to build without DAYFLOW_BACKEND_URL (fork / CI builds)
 #   DISABLE_UPDATES  - Set to 1 to ship without Sparkle updates (no feed URL, no checks, menu item hidden)
 #
 # SIGN_ID="-" produces an ad-hoc signed build (no Developer ID needed). It runs
@@ -148,18 +147,6 @@ if [[ -d "${SPARKLE_DIR}" ]]; then
     "${SPARKLE_DIR}"
 fi
 
-if [[ -z "${DAYFLOW_BACKEND_URL:-}" ]]; then
-  if [[ "${ALLOW_MISSING_BACKEND_URL:-0}" == "1" ]]; then
-    echo "WARNING: DAYFLOW_BACKEND_URL not set; building without a Dayflow backend URL." >&2
-  else
-    echo "ERROR: DAYFLOW_BACKEND_URL must be set before building a release DMG." >&2
-    exit 1
-  fi
-else
-  RESOLVED_DAYFLOW_BACKEND_URL="${DAYFLOW_BACKEND_URL}"
-  /usr/libexec/PlistBuddy -c "Set :DayflowBackendURL ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist" \
-    >/dev/null 2>&1 || /usr/libexec/PlistBuddy -c "Add :DayflowBackendURL string ${RESOLVED_DAYFLOW_BACKEND_URL}" "${SANITIZED_APP}/Contents/Info.plist"
-fi
 
 if [[ "${DISABLE_UPDATES:-0}" == "1" ]]; then
   echo "Disabling Sparkle updates in this build…"

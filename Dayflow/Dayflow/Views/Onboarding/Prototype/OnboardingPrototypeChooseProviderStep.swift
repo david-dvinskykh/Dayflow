@@ -55,21 +55,10 @@ struct OnboardingPrototypeChooseProviderStep: View {
   let flowVariant: String
   let onSelect: (LLMProviderID) -> Void
 
-  @ObservedObject private var authManager = DayflowAuthManager.shared
-  @State private var isShowingDayflowProSignIn = false
-  @State private var dayflowProInitialReferralCode = ""
   @State private var isCodexCLIInstalled = false
   @State private var isClaudeCLIInstalled = false
 
   private static let providers: [ComparisonProvider] = [
-    ComparisonProvider(
-      providerID: .dayflow,
-      title: String(localized: "Dayflow Pro"),
-      accuracy: RatedValue(text: String(localized: "Best"), rating: .best),
-      subscription: String(localized: "7 day free trial"),
-      ease: RatedValue(text: String(localized: "Sign in and go"), rating: .best),
-      notes: String(localized: "Sync across devices")
-    ),
     ComparisonProvider(
       providerID: .chatGPT,
       title: String(localized: "ChatGPT"),
@@ -129,29 +118,9 @@ struct OnboardingPrototypeChooseProviderStep: View {
       // 3 equal spacers above + 4 below keep the gap ratio at 3:4 as the window resizes.
       ForEach(0..<3) { _ in Spacer(minLength: 0) }
 
-      if isShowingDayflowProSignIn {
-        DayflowProOnboardingSignInPanel(
-          flowID: flowID,
-          flowVariant: flowVariant,
-          layoutScale: 0.8,
-          textScale: 1.1,
-          initialReferralCode: dayflowProInitialReferralCode,
-          onBack: {
-            withAnimation(.easeInOut(duration: 0.25)) {
-              isShowingDayflowProSignIn = false
-            }
-          },
-          onComplete: {
-            onSelect(.dayflow)
-          }
-        )
-        .padding(.horizontal, 112)
-        .transition(.opacity)
-      } else {
         comparisonTable
           .padding(.horizontal, 40)
           .transition(.opacity)
-      }
 
       ForEach(0..<4) { _ in Spacer(minLength: 0) }
     }
@@ -166,23 +135,6 @@ struct OnboardingPrototypeChooseProviderStep: View {
       guard !Task.isCancelled else { return }
       isCodexCLIInstalled = installed.codex
       isClaudeCLIInstalled = installed.claude
-    }
-  }
-
-  private func startDayflowProSignIn() {
-    OnboardingPrototypeAnalytics.trackDayflowProSelected(
-      flowID: flowID,
-      flowVariant: flowVariant,
-      selectionStage: "started_sign_in"
-    )
-    dayflowProInitialReferralCode = authManager.pendingReferralCode ?? ""
-
-    withAnimation(.easeInOut(duration: 0.25)) {
-      isShowingDayflowProSignIn = true
-    }
-
-    Task {
-      await authManager.signOut()
     }
   }
 
@@ -279,14 +231,6 @@ struct OnboardingPrototypeChooseProviderStep: View {
   @ViewBuilder
   private func headerIcon(for providerID: LLMProviderID) -> some View {
     switch providerID {
-    case .dayflow:
-      Image("DayflowLogo")
-        .resizable()
-        .renderingMode(.original)
-        .interpolation(.high)
-        .antialiased(true)
-        .scaledToFit()
-        .frame(width: 36, height: 36)
     case .chatGPT:
       iconCircle(imageName: "ChatGPTLogo")
     case .claude:
@@ -369,11 +313,7 @@ struct OnboardingPrototypeChooseProviderStep: View {
   private func selectButton(for provider: ComparisonProvider) -> some View {
     DayflowSurfaceButton(
       action: {
-        if provider.providerID == .dayflow {
-          startDayflowProSignIn()
-        } else {
-          onSelect(provider.providerID)
-        }
+        onSelect(provider.providerID)
       },
       content: {
         Text("Select")

@@ -168,23 +168,6 @@ final class LLMService: LLMServicing {
     return nil
   }
 
-  private func makeDayflowProvider(endpoint: String) -> DayflowBackendProvider? {
-    let token = DayflowAuthManager.storedSessionToken()?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let token, !token.isEmpty else {
-      print("❌ [LLMService] Dayflow provider unavailable: missing session token")
-      return nil
-    }
-    print(
-      "🔐 [LLMService] Dayflow provider ready endpoint=\(endpoint) token_length=\(token.count)"
-    )
-    return DayflowBackendProvider(token: token, endpoint: endpoint)
-  }
-
-  private func resolvedDayflowEndpoint(savedEndpoint: String?) -> String? {
-    DayflowBackendConfiguration.endpoint(legacySavedEndpoint: savedEndpoint)
-  }
-
   private func makeOllamaProvider(endpoint: String) -> OllamaProvider {
     OllamaProvider(endpoint: endpoint)
   }
@@ -272,24 +255,6 @@ final class LLMService: LLMServicing {
             }
           }
         ), fallbackState: fallbackState
-      )
-    case .dayflow:
-      let savedEndpoint = DayflowEndpointPreferences.load()
-      guard let endpoint = resolvedDayflowEndpoint(savedEndpoint: savedEndpoint) else {
-        throw noProviderError()
-      }
-      guard let provider = makeDayflowProvider(endpoint: endpoint) else { throw noProviderError() }
-      return (
-        actions: BatchProviderActions(
-          transcribeScreenshots: provider.transcribeScreenshots,
-          generateActivityCards: Self.rewritingWholeWindow(provider.generateActivityCards),
-          // The backend is shown every card in the window, like rewritingWholeWindow providers.
-          generateTimeline: { screenshots, context, batchId in
-            let result = try await provider.generateTimeline(
-              screenshots: screenshots, context: context, batchId: batchId)
-            return (result.cards, result.observations, nil, result.log)
-          }
-        ), fallbackState: nil
       )
     case .local:
       let provider = makeOllamaProvider(endpoint: localProviderEndpoint())
@@ -557,22 +522,6 @@ final class LLMService: LLMServicing {
     switch providerID {
     case .gemini:
       guard let provider = makeGeminiProvider() else { throw noProviderError() }
-      return TextProviderActions(
-        generateText: { prompt in
-          try await provider.generateText(prompt: prompt)
-        },
-        generateTextStreaming: nil
-      )
-    case .dayflow:
-      guard
-        let resolvedEndpoint = resolvedDayflowEndpoint(
-          savedEndpoint: DayflowEndpointPreferences.load())
-      else {
-        throw noProviderError()
-      }
-      guard let provider = makeDayflowProvider(endpoint: resolvedEndpoint) else {
-        throw noProviderError()
-      }
       return TextProviderActions(
         generateText: { prompt in
           try await provider.generateText(prompt: prompt)

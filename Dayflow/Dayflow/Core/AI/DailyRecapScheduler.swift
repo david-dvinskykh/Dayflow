@@ -445,30 +445,6 @@ final class DailyRecapScheduler: @unchecked Sendable {
     return trimmedSummary.isEmpty ? nil : trimmedSummary
   }
 
-  private static func makePersistedDailyDraftJSON(from response: DayflowDailyGenerationResponse)
-    -> String?
-  {
-    let highlights = normalizedUniqueLines(from: response.highlights).map {
-      PersistedDailyBulletItem(text: $0)
-    }
-    let tasks = normalizedUniqueLines(from: response.unfinished).map {
-      PersistedDailyBulletItem(text: $0)
-    }
-    let blockers = normalizedBlockersText(from: response.blockers)
-
-    let draft = PersistedDailyStandupDraft(
-      highlightsTitle: "Yesterday's highlights",
-      highlights: highlights,
-      tasksTitle: "Today's tasks",
-      tasks: tasks,
-      blockersTitle: "Blockers",
-      blockersBody: blockers
-    )
-
-    guard let data = try? JSONEncoder().encode(draft) else { return nil }
-    return String(data: data, encoding: .utf8)
-  }
-
   private static func normalizedUniqueLines(from values: [String]) -> [String] {
     var seen: Set<String> = []
     return values.compactMap { raw in

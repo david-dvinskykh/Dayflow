@@ -111,8 +111,9 @@ enum LegacyLLMProviderMigration {
         localEndpointOverride: nil
       )
     case .dayflowBackend(let endpoint):
+      // Dayflow Pro was removed in this build; fall back to Gemini.
       return PrimarySelection(
-        providerID: .dayflow,
+        providerID: .gemini,
         dayflowEndpointOverride: normalized(endpoint),
         localEndpointOverride: nil
       )
@@ -136,8 +137,6 @@ enum LegacyLLMProviderMigration {
     combinedChatCLITool: LegacyChatCLITool
   ) -> LLMProviderID? {
     switch normalized(rawValue)?.lowercased() {
-    case LLMProviderID.dayflow.rawValue:
-      return .dayflow
     case LLMProviderID.gemini.rawValue:
       return .gemini
     case LLMProviderID.chatGPT.rawValue:

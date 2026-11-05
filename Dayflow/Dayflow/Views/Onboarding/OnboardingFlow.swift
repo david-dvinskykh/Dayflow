@@ -110,9 +110,6 @@ struct OnboardingFlow: View {
           flowID: flowID,
           flowVariant: "production_onboarding",
           onSelect: { providerID in
-            if providerID == .dayflow, !saveRouting(primary: providerID) {
-              return
-            }
             selectedProviderIDRawValue = providerID.rawValue
 
             var props: [String: Any] = [
@@ -124,9 +121,6 @@ struct OnboardingFlow: View {
               props["local_engine"] = localEngine
             }
             AnalyticsService.shared.capture("llm_provider_selected", props)
-            if providerID == .dayflow {
-              recordCurrentProvider(providerID)
-            }
             advance(extraProps: props)
           }
         )
@@ -161,10 +155,7 @@ struct OnboardingFlow: View {
       case .screen:
         ScreenRecordingPermissionView(
           onBack: {
-            // Go back to llmSetup, or llmSelection if they picked dayflow
-            let backStep: OnboardingStep =
-              (selectedProviderID == .dayflow) ? .llmSelection : .llmSetup
-            setStep(backStep)
+            setStep(.llmSetup)
           },
           onNext: { advance() }
         )
@@ -324,9 +315,7 @@ struct OnboardingFlow: View {
       savedStepRawValue = step.rawValue
     case .llmSelection:
       markStepCompleted(step, extraProps: extraProps)
-      let nextStep: OnboardingStep =
-        (selectedProviderID == .dayflow) ? .screen : .llmSetup
-      setStep(nextStep)
+      setStep(.llmSetup)
     case .llmSetup:
       markStepCompleted(step)
       setStep(.screen)

@@ -72,11 +72,6 @@ enum LLMProviderRoutingStore {
         to: defaults
       )
     }
-    if let endpoint = migration.dayflowEndpointOverride,
-      !DayflowEndpointPreferences.hasStoredValue(in: defaults)
-    {
-      try DayflowEndpointPreferences.saveVerified(endpoint, to: defaults)
-    }
     if let endpoint = migration.localEndpointOverride,
       normalizedLocalEndpoint(in: defaults) == nil
     {

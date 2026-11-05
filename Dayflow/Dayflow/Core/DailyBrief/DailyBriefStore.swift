@@ -33,10 +33,8 @@ final class DailyBriefStore: ObservableObject {
   /// Automatic runs per day before giving up. The Retry button ignores this.
   static let maxAutomaticAttemptsPerDay = 2
 
-  var isFeatureEnabled: Bool {
-    guard let email = DayflowAuthManager.shared.signedInEmail?.lowercased() else { return false }
-    return Self.allowlistedEmails.contains(email)
-  }
+  /// The brief was limited to allowlisted Dayflow accounts; with accounts removed it stays off.
+  var isFeatureEnabled: Bool { false }
 
   // MARK: - State
 

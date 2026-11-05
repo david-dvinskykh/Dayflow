@@ -103,7 +103,8 @@ final class AppDeepLinkRouter {
       print("[DeepLink] Referral link missing code")
       return
     }
-    DayflowAuthManager.shared.setPendingReferralCode(code)
+    // Dayflow Pro referrals were removed in this build; the code is ignored.
+    print("[DeepLink] Ignoring referral code (\(code.count) chars): referrals are not supported")
   }
 
 }

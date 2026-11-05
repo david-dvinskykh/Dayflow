@@ -204,7 +204,7 @@ class ProviderSetupState: ObservableObject {
           )
         ),
       ]
-    case .gemini, .dayflow:
+    case .gemini:
       let storedGeminiKey =
         KeychainManager.shared.retrieve(for: "gemini")?
         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
