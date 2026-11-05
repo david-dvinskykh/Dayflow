@@ -180,6 +180,20 @@ struct CursorUsageSummary: Equatable, Sendable {
     var costUSD = 0.0
   }
 
+  /// Dayflow's spending on the model it uses now (the model of its latest logged run).
+  /// Days on which Dayflow ran a different model, or shared a model with the user's own
+  /// work, would otherwise skew the forecast.
+  struct CurrentModel: Equatable, Sendable {
+    let model: String
+    let requests: Int
+    let costUSD: Double
+    /// Clock hours in which Dayflow made at least one request with this model, so nights
+    /// and days off don't dilute the hourly cost.
+    let activeHours: Int
+
+    var costPerHour: Double { costUSD / Double(max(activeHours, 1)) }
+  }
+
   let firstDate: Date
   let lastDate: Date
   let requests: Int
@@ -192,16 +206,9 @@ struct CursorUsageSummary: Equatable, Sendable {
   let days: [Day]
   /// Most expensive first.
   let models: [ModelTotal]
-
-  var dayflowAverageCostPerRequest: Double? {
-    dayflowRequests > 0 ? dayflowCostUSD / Double(dayflowRequests) : nil
-  }
-
-  var dayflowActiveDays: Int { days.filter { $0.dayflowRequests > 0 }.count }
-
-  var dayflowAverageCostPerActiveDay: Double? {
-    dayflowActiveDays > 0 ? dayflowCostUSD / Double(dayflowActiveDays) : nil
-  }
+  /// What Dayflow's attributed requests cost per model, most expensive first.
+  let dayflowModels: [ModelTotal]
+  let currentModel: CurrentModel?
 }
 
 enum CursorUsageMatcher {
@@ -221,6 +228,17 @@ enum CursorUsageMatcher {
     }
   }
 
+  /// The model of Dayflow's most recent run that named one.
+  static func currentModel(of calls: [CursorUsageCallWindow]) -> String? {
+    calls
+      .filter { call in
+        guard let model = call.model else { return false }
+        return !model.isEmpty && model != CursorCLI.defaultModelLabel
+      }
+      .max { $0.end < $1.end }?
+      .model
+  }
+
   static func summarize(
     events: [CursorUsageEvent],
     dayflowCalls: [CursorUsageCallWindow],
@@ -238,8 +256,11 @@ enum CursorUsageMatcher {
 
     var days: [String: CursorUsageSummary.Day] = [:]
     var models: [String: CursorUsageSummary.ModelTotal] = [:]
+    var dayflowModels: [String: CursorUsageSummary.ModelTotal] = [:]
     var totals = (requests: 0, cost: 0.0, tokens: 0)
     var dayflow = (requests: 0, cost: 0.0, tokens: 0)
+    let current = currentModel(of: dayflowCalls)
+    var currentTotals = (requests: 0, cost: 0.0, hours: Set<Int>())
 
     for event in events {
       let key = dayFormatter.string(from: event.date)
@@ -264,6 +285,18 @@ enum CursorUsageMatcher {
         dayflow.requests += 1
         dayflow.cost += event.costUSD
         dayflow.tokens += event.totalTokens
+
+        var dayflowModel =
+          dayflowModels[modelKey] ?? CursorUsageSummary.ModelTotal(id: modelKey)
+        dayflowModel.requests += 1
+        dayflowModel.costUSD += event.costUSD
+        dayflowModels[modelKey] = dayflowModel
+
+        if let current, current.caseInsensitiveCompare(event.model) == .orderedSame {
+          currentTotals.requests += 1
+          currentTotals.cost += event.costUSD
+          currentTotals.hours.insert(Int(event.date.timeIntervalSince1970 / 3600))
+        }
       }
       days[key] = day
     }
@@ -278,7 +311,14 @@ enum CursorUsageMatcher {
       dayflowCostUSD: dayflow.cost,
       dayflowTokens: dayflow.tokens,
       days: days.values.sorted { $0.id > $1.id },
-      models: models.values.sorted { $0.costUSD > $1.costUSD }
+      models: models.values.sorted { $0.costUSD > $1.costUSD },
+      dayflowModels: dayflowModels.values.sorted { $0.costUSD > $1.costUSD },
+      currentModel: current.flatMap { model in
+        guard currentTotals.requests > 0 else { return nil }
+        return CursorUsageSummary.CurrentModel(
+          model: model, requests: currentTotals.requests, costUSD: currentTotals.cost,
+          activeHours: currentTotals.hours.count)
+      }
     )
   }
 }

@@ -80,4 +80,38 @@ final class CursorUsageReportTests: XCTestCase {
     ]
     XCTAssertFalse(CursorUsageMatcher.isDayflowEvent(events[0], calls: calls))
   }
+
+  func testForecastUsesOnlyTheModelDayflowRunsNow() throws {
+    let csv = [
+      header,
+      // Morning: Dayflow on composer, 1 request in its run window.
+      row("2026-11-05T09:37:00.000Z", model: "composer-2.5", cost: "0.90"),
+      // Afternoon: Dayflow on luna, two hours with one request each.
+      row("2026-11-05T12:10:00.000Z", model: "gpt-5.6-luna-low", cost: "0.20"),
+      row("2026-11-05T13:10:00.000Z", model: "gpt-5.6-luna-low", cost: "0.40"),
+      // The user's own work, outside any Dayflow run.
+      row("2026-11-05T15:00:00.000Z", model: "composer-2.5", cost: "5.00"),
+    ].joined(separator: "\n")
+    let events = try CursorUsageCSV.parse(csv)
+    func window(_ end: String, _ model: String) throws -> CursorUsageCallWindow {
+      let end = try XCTUnwrap(CursorUsageCSV.parseDate(end))
+      return CursorUsageCallWindow(start: end.addingTimeInterval(-120), end: end, model: model)
+    }
+    let calls = [
+      try window("2026-11-05T09:37:30Z", "composer-2.5"),
+      try window("2026-11-05T12:10:30Z", "gpt-5.6-luna-low"),
+      try window("2026-11-05T13:10:30Z", "gpt-5.6-luna-low"),
+    ]
+
+    let summary = try XCTUnwrap(CursorUsageMatcher.summarize(events: events, dayflowCalls: calls))
+
+    XCTAssertEqual(summary.dayflowRequests, 3)
+    XCTAssertEqual(summary.dayflowCostUSD, 1.50, accuracy: 0.0001)
+    XCTAssertEqual(summary.dayflowModels.map(\.id), ["composer-2.5", "gpt-5.6-luna-low"])
+    let current = try XCTUnwrap(summary.currentModel)
+    XCTAssertEqual(current.model, "gpt-5.6-luna-low")
+    XCTAssertEqual(current.requests, 2)
+    XCTAssertEqual(current.activeHours, 2)
+    XCTAssertEqual(current.costPerHour, 0.30, accuracy: 0.0001)
+  }
 }

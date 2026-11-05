@@ -160,16 +160,17 @@ struct CursorUsageSettingsSection: View {
           "\(Self.money(summary.dayflowCostUSD)) · \(summary.dayflowRequests) \(String(localized: "requests")) · \(Self.tokens(summary.dayflowTokens))"
       )
     }
-    if let perRequest = summary.dayflowAverageCostPerRequest,
-      let perDay = summary.dayflowAverageCostPerActiveDay
-    {
+    if let current = summary.currentModel {
       SettingsRow(
-        label: String(localized: "Dayflow average"),
-        subtitle: String(localized: "Per request, per active day, and for 22 such days a month.")
+        label: String(localized: "Dayflow forecast"),
+        subtitle: String(
+          localized:
+            "Only \(current.model), the model Dayflow uses now: per hour Dayflow ran, an 8-hour day, and 22 such days a month."
+        )
       ) {
         SettingsMetadata(
           text:
-            "\(Self.money(perRequest)) · \(Self.money(perDay))/\(String(localized: "day")) · ≈\(Self.money(perDay * 22))/\(String(localized: "month"))"
+            "\(Self.money(current.costPerHour))/\(String(localized: "hour")) · \(Self.money(current.costPerHour * 8))/\(String(localized: "day")) · ≈\(Self.money(current.costPerHour * 8 * 22))/\(String(localized: "month"))"
         )
       }
     }
@@ -221,15 +222,32 @@ struct CursorUsageSettingsSection: View {
         .fontWeight(.semibold)
         .foregroundColor(SettingsStyle.text)
         .padding(.top, 14)
+      HStack {
+        Text("Model").frame(width: 180, alignment: .leading)
+        Text("Requests").frame(width: 80, alignment: .trailing)
+        Text("Cost").frame(width: 80, alignment: .trailing)
+        Text("Dayflow").frame(width: 120, alignment: .trailing)
+      }
+      .font(.custom("Figtree", size: 12))
+      .foregroundColor(SettingsStyle.secondary)
       ForEach(summary.models) { model in
+        let dayflow = summary.dayflowModels.first { $0.id == model.id }
         HStack {
           Text(model.id).frame(width: 180, alignment: .leading)
           Text("\(model.requests)").frame(width: 80, alignment: .trailing)
           Text(Self.money(model.costUSD)).frame(width: 80, alignment: .trailing)
+          Text(dayflow.map { "\(Self.money($0.costUSD)) (\($0.requests))" } ?? "–")
+            .frame(width: 120, alignment: .trailing)
         }
         .font(.system(size: 12, design: .monospaced))
         .foregroundColor(SettingsStyle.text)
       }
+      Text(
+        "A model you also use yourself in Cursor can't be split exactly: requests made while Dayflow was running it count as Dayflow."
+      )
+      .font(.custom("Figtree", size: 11))
+      .foregroundColor(SettingsStyle.secondary)
+      .padding(.top, 4)
     }
   }
 
