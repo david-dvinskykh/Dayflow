@@ -238,13 +238,22 @@ extension CodexProvider {
       text += "User: " + userName + "\n"
     }
     text += "Previous cards: " + previousCardsJSON + "\n"
+    // Cursor has no image flag: the runner lists the frames as workspace files after the
+    // prompt, and the agent has to open them with its file tool.
+    let readsFramesFromFiles = cliTool == .cursor
     text +=
       "New screenshots: " + String(frames.frames.count)
-      + " frames are attached to this message as images, in order, covering "
+      + (readsFramesFromFiles
+        ? " frames are image files listed at the end of this message, in the same order, covering "
+        : " frames are attached to this message as images, in order, covering ")
       + formatTimestampForPrompt(frames.windowStart) + " to "
       + formatTimestampForPrompt(frames.windowEnd) + ":\n"
     text += frameLines + "\n\n"
-    text += "Do not run commands or use tools; everything you need is in this message.\n\n"
+    text +=
+      readsFramesFromFiles
+      ? "Open every listed image file with your file reading tool. Do not run commands, edit "
+        + "files or use any other tool.\n\n"
+      : "Do not run commands or use tools; everything you need is in this message.\n\n"
     text += CodexTimelinePrompt.outputBlock
     if let accessibilityLog {
       text += ClaudeTimelinePrompt.accessibilityLogSection(accessibilityLog)
