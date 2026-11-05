@@ -28,7 +28,7 @@ extension CodexProvider {
     let basePrompt = buildCardsPrompt(observations: observations, context: context)
     var actualPromptUsed = basePrompt
 
-    let modelConfiguration = Self.activityCardModelConfiguration()
+    let modelConfiguration = resolvedModelConfiguration(Self.activityCardModelConfiguration())
     var model = modelConfiguration.model
     let effort = modelConfiguration.reasoningEffort
 

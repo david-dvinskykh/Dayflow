@@ -145,6 +145,33 @@ class ProviderSetupState: ObservableObject {
       claudeCLIReport = nil
       isCheckingCLIStatus = false
       hasStartedCLICheck = false
+    case .cursor:
+      steps = [
+        SetupStep(
+          id: "intro", title: String(localized: "Before you begin"),
+          contentType: .information(
+            String(localized: "Use the Cursor CLI"),
+            String(
+              localized:
+                "Dayflow runs Cursor's command-line agent with your Cursor account. It reads your screenshots from Dayflow's own folder and uses your account's default model."
+            ))),
+        SetupStep(
+          id: "install", title: String(localized: "Install CLI"),
+          contentType: .terminalCommand(CursorCLI.installCommand)),
+        SetupStep(
+          id: "login", title: String(localized: "Sign in"),
+          contentType: .terminalCommand(CursorCLI.loginCommand)),
+        SetupStep(
+          id: "test", title: String(localized: "Test connection"),
+          contentType: .information(
+            String(localized: "Test Connection"),
+            String(localized: "Verify the Cursor CLI answers a simple question."))),
+        SetupStep(
+          id: "complete", title: String(localized: "Complete"),
+          contentType: .information(
+            String(localized: "All set!"),
+            String(localized: "Cursor is now configured and ready to use with Dayflow."))),
+      ]
     case .openAICompatible:
       steps = [
         SetupStep(

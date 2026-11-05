@@ -56,6 +56,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
   @Published private(set) var openAICompatibleAPIKey = ""
   @Published private(set) var codexCLIInstalled = false
   @Published private(set) var claudeCLIInstalled = false
+  @Published private(set) var cursorCLIInstalled = false
   @Published private(set) var isCheckingCLIReadiness = false
 
   @Published var geminiPromptOverridesLoaded = false
@@ -242,9 +243,11 @@ final class ProvidersSettingsViewModel: ObservableObject {
     Task.detached { [weak self] in
       let codexInstalled = CLIDetector.isInstalled(.codex)
       let claudeInstalled = CLIDetector.isInstalled(.claude)
+      let cursorInstalled = CursorCLI.isInstalled()
       await MainActor.run { [weak self] in
         self?.codexCLIInstalled = codexInstalled
         self?.claudeCLIInstalled = claudeInstalled
+        self?.cursorCLIInstalled = cursorInstalled
         self?.isCheckingCLIReadiness = false
       }
     }
@@ -380,6 +383,9 @@ final class ProvidersSettingsViewModel: ObservableObject {
       refreshCLIReadiness()
     case .claude:
       claudeCLIInstalled = true
+      refreshCLIReadiness()
+    case .cursor:
+      cursorCLIInstalled = true
       refreshCLIReadiness()
     case .gemini:
       let preference = GeminiModelPreference.load()
@@ -585,6 +591,8 @@ final class ProvidersSettingsViewModel: ObservableObject {
       return codexCLIInstalled && LLMProviderSetupPreferences.isComplete(.chatGPT)
     case .claude:
       return claudeCLIInstalled && LLMProviderSetupPreferences.isComplete(.claude)
+    case .cursor:
+      return cursorCLIInstalled && LLMProviderSetupPreferences.isComplete(.cursor)
     case .openAICompatible:
       guard let configuration = OpenAICompatiblePreferences.load(), configuration.isComplete else {
         return false
@@ -606,7 +614,8 @@ final class ProvidersSettingsViewModel: ObservableObject {
   }
 
   func isProviderReadinessChecking(_ providerId: LLMProviderID) -> Bool {
-    isCheckingCLIReadiness && (providerId == .chatGPT || providerId == .claude)
+    isCheckingCLIReadiness
+      && (providerId == .chatGPT || providerId == .claude || providerId == .cursor)
   }
 
   func clearBackupProvider() {
@@ -711,6 +720,8 @@ final class ProvidersSettingsViewModel: ObservableObject {
       properties["chat_cli_tool"] = "codex"
     } else if providerId == .claude {
       properties["chat_cli_tool"] = "claude"
+    } else if providerId == .cursor {
+      properties["chat_cli_tool"] = "cursor"
     } else if providerId == .openAICompatible {
       properties["endpoint_kind"] = openAICompatiblePreset.rawValue
       properties["has_api_key"] =
@@ -749,6 +760,10 @@ final class ProvidersSettingsViewModel: ObservableObject {
         summary: String(localized: "Uses Codex CLI through your existing ChatGPT plan")
       ),
       CompactProviderInfo(
+        id: .cursor,
+        summary: String(localized: "Uses the Cursor CLI through your existing Cursor plan")
+      ),
+      CompactProviderInfo(
         id: .gemini,
         summary: String(localized: "Gemini free tier • fast & accurate")
       ),
@@ -784,6 +799,8 @@ final class ProvidersSettingsViewModel: ObservableObject {
       return cliStatusLabel(for: .chatGPT)
     case .claude:
       return cliStatusLabel(for: .claude)
+    case .cursor:
+      return cliStatusLabel(for: .cursor)
     case .openAICompatible:
       return openAICompatibleModelID.isEmpty
         ? String(localized: "OpenAI-compatible endpoint") : openAICompatibleModelID
@@ -804,6 +821,9 @@ final class ProvidersSettingsViewModel: ObservableObject {
     case .claude:
       return claudeCLIInstalled
         ? String(localized: "Claude Code detected") : String(localized: "Claude Code not detected")
+    case .cursor:
+      return cursorCLIInstalled
+        ? String(localized: "Cursor CLI detected") : String(localized: "Cursor CLI not detected")
     default:
       return String(localized: "Not applicable")
     }
@@ -819,6 +839,8 @@ final class ProvidersSettingsViewModel: ObservableObject {
       return String(localized: "Codex CLI")
     case .claude:
       return String(localized: "Claude Code")
+    case .cursor:
+      return String(localized: "Cursor CLI")
     case .openAICompatible:
       return String(localized: "OpenAI-compatible API")
     case .dayflow:
@@ -832,6 +854,7 @@ final class ProvidersSettingsViewModel: ObservableObject {
     case .gemini: return "Gemini"
     case .chatGPT: return "ChatGPT"
     case .claude: return "Claude"
+    case .cursor: return "Cursor"
     case .openAICompatible: return "OpenAI-compatible"
     case .dayflow: return String(localized: "Dayflow Pro")
     }
@@ -851,6 +874,7 @@ struct CompactProviderInfo: Identifiable {
     case .gemini: return "Gemini"
     case .chatGPT: return "ChatGPT"
     case .claude: return "Claude"
+    case .cursor: return "Cursor"
     case .openAICompatible: return "OpenAI-compatible"
     case .dayflow: return String(localized: "Dayflow Pro")
     }

@@ -325,6 +325,15 @@ final class LLMService: LLMServicing {
           generateTimeline: provider.generateTimeline
         ), fallbackState: nil
       )
+    case .cursor:
+      let provider = CodexProvider(tool: .cursor)
+      return (
+        actions: BatchProviderActions(
+          transcribeScreenshots: provider.transcribeScreenshots,
+          generateActivityCards: Self.rewritingWholeWindow(provider.generateActivityCards),
+          generateTimeline: provider.generateTimeline
+        ), fallbackState: nil
+      )
     }
   }
 
@@ -596,6 +605,14 @@ final class LLMService: LLMServicing {
       )
     case .claude:
       let provider = ClaudeProvider()
+      return TextProviderActions(
+        generateText: { prompt in
+          try await provider.generateText(prompt: prompt)
+        },
+        generateTextStreaming: provider.generateTextStreaming
+      )
+    case .cursor:
+      let provider = CodexProvider(tool: .cursor)
       return TextProviderActions(
         generateText: { prompt in
           try await provider.generateText(prompt: prompt)

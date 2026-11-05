@@ -1,13 +1,33 @@
 import Foundation
 
+/// Runs batches through a print-mode agent CLI: Codex by default, or the Cursor CLI, which
+/// takes the same prompts but picks its own model unless the user configured one.
 final class CodexProvider: AgentCLISupporting {
-  let providerID: LLMProviderID = .chatGPT
-  var cliTool: ChatCLITool { .codex }
+  let cliTool: ChatCLITool
+  var providerID: LLMProviderID { cliTool.providerID }
   let runner = ChatCLIProcessRunner()
   let config = ChatCLIConfigManager.shared
 
-  init() {
+  init(tool: ChatCLITool = .codex) {
+    precondition(tool != .claude, "Claude runs through ClaudeProvider")
+    self.cliTool = tool
     config.ensureWorkingDirectory()
+  }
+
+  var cliDisplayName: String {
+    cliTool == .cursor ? "Cursor CLI" : "Codex CLI"
+  }
+
+  /// The Codex model for Codex, or Cursor's configured/default model for Cursor.
+  func cliModel(_ codexModel: String) -> String {
+    cliTool == .cursor ? CursorCLI.modelLabel : codexModel
+  }
+
+  func resolvedModelConfiguration(
+    _ codexConfiguration: (model: String, reasoningEffort: String?)
+  ) -> (model: String, reasoningEffort: String?) {
+    guard cliTool == .cursor else { return codexConfiguration }
+    return (model: CursorCLI.modelLabel, reasoningEffort: nil)
   }
 
   static func availabilityFallback(for model: String, error: Error, stderr: String? = nil)

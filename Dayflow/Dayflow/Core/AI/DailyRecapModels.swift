@@ -54,7 +54,7 @@ enum DailyRecapProvider: String, Codable, CaseIterable, Sendable {
       return .claude
     case .local:
       return .local
-    case .openAICompatible:
+    case .openAICompatible, .cursor:
       return .none
     }
   }

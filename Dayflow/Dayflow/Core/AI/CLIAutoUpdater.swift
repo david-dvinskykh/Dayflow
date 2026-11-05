@@ -53,6 +53,9 @@ enum CLIAutoUpdater {
 
   private static func updateCommand(for tool: ChatCLITool) -> String? {
     switch tool {
+    case .cursor:
+      // Not offered: Dayflow only auto-updates the CLIs it has always managed.
+      return nil
     case .claude:
       return "claude update"
     case .codex:
@@ -65,6 +68,8 @@ enum CLIAutoUpdater {
 
   private static func installedVersion(of tool: ChatCLITool) -> String? {
     switch tool {
+    case .cursor:
+      return CursorCLI.installedVersion()
     case .claude:
       return LoginShellRunner.version(of: "claude").map(CLIVersionTelemetry.numericVersion)
     case .codex:

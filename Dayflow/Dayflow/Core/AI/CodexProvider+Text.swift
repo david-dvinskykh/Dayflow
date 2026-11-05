@@ -5,10 +5,10 @@ extension CodexProvider {
     ChatStreamEvent, Error
   > {
     runner.runStreaming(
-      tool: .codex,
+      tool: cliTool,
       prompt: prompt,
       workingDirectory: config.workingDirectory,
-      model: "gpt-5.6-luna",
+      model: cliModel("gpt-5.6-luna"),
       reasoningEffort: "low",
       sessionId: sessionId
     )
@@ -46,7 +46,7 @@ extension CodexProvider {
   func generateText(prompt: String) async throws -> (text: String, log: LLMCall) {
     try await generateText(
       prompt: prompt,
-      model: "gpt-5.2",
+      model: cliModel("gpt-5.2"),
       reasoningEffort: "high",
       disableTools: false
     )
@@ -82,7 +82,7 @@ extension CodexProvider {
     }
 
     guard run.exitCode == 0 else {
-      let errorMessage = run.failureMessage(toolName: "Codex CLI")
+      let errorMessage = run.failureMessage(toolName: cliDisplayName)
       let error = NSError(
         domain: "CodexProvider", code: Int(run.exitCode),
         userInfo: [NSLocalizedDescriptionKey: errorMessage])

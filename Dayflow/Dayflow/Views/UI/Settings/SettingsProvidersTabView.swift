@@ -126,7 +126,7 @@ struct SettingsProvidersTabView: View {
           text: KeychainManager.shared.retrieve(for: "gemini") != nil
             ? String(localized: "Stored safely in Keychain") : String(localized: "Not set"))
       }
-    case .chatGPT, .claude:
+    case .chatGPT, .claude, .cursor:
       SettingsRow(label: String(localized: "CLI")) {
         SettingsMetadata(text: viewModel.cliStatusLabel(for: viewModel.currentProvider))
       }
@@ -200,6 +200,8 @@ struct SettingsProvidersTabView: View {
             selectedTool: .claude,
             onTestComplete: { _ in }
           )
+        case .cursor:
+          CursorCLITestView(onTestComplete: { _ in })
         case .openAICompatible:
           VStack(alignment: .leading, spacing: 10) {
             Text(
@@ -454,7 +456,7 @@ struct SettingsProvidersTabView: View {
         ],
         onReset: viewModel.resetOllamaPromptOverrides
       )
-    case .dayflow, .chatGPT, .claude, .openAICompatible:
+    case .dayflow, .chatGPT, .claude, .cursor, .openAICompatible:
       EmptyView()
     }
   }

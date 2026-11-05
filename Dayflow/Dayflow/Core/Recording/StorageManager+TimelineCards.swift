@@ -359,6 +359,10 @@ extension StorageManager {
       return
         "You successfully installed Dayflow with Claude. Come back in 30 minutes to see your first real activity card! ✨ (This is a sample card, so you can see what your timeline will look like.)"
 
+    case .cursor:
+      return
+        "You successfully installed Dayflow with Cursor. Come back in 30 minutes to see your first real activity card! ✨ (This is a sample card, so you can see what your timeline will look like.)"
+
     case .local:
       // Check which local engine they picked
       let localEngine = UserDefaults.standard.string(forKey: "llmLocalEngine") ?? "ollama"

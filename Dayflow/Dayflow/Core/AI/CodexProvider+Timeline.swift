@@ -26,7 +26,7 @@ extension CodexProvider {
     }
 
     let callStart = Date()
-    let modelConfiguration = Self.timelineModelConfiguration()
+    let modelConfiguration = resolvedModelConfiguration(Self.timelineModelConfiguration())
     var model = modelConfiguration.model
     let effort = modelConfiguration.reasoningEffort
     var lastRun: ChatCLIRunResult?
@@ -80,7 +80,7 @@ extension CodexProvider {
             throw NSError(
               domain: "ChatCLI", code: Int(run.exitCode),
               userInfo: [
-                NSLocalizedDescriptionKey: run.failureMessage(toolName: "codex"),
+                NSLocalizedDescriptionKey: run.failureMessage(toolName: cliDisplayName),
                 "partialStderr": run.stderr,
               ])
           }
@@ -170,12 +170,13 @@ extension CodexProvider {
     prompt: String, imagePaths: [String], model: String, reasoningEffort: String?
   ) async throws -> ChatCLIRunResult {
     let runner = runner
+    let tool = cliTool
     let workingDirectory = config.workingDirectory
     // The frames go to the CLI as written; the shared image preparation would shrink them to
     // 720 pixels, which loses small on-screen text.
     return try await Task.detached(priority: .utility) {
       try runner.run(
-        tool: .codex,
+        tool: tool,
         prompt: prompt,
         workingDirectory: workingDirectory,
         imagePaths: imagePaths,

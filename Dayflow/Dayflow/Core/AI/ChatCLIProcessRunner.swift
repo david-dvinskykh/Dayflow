@@ -667,6 +667,14 @@ struct ChatCLIProcessRunner {
         reasoningEffort: reasoningEffort,
         sessionId: sessionId
       )
+    case .cursor:
+      cmdParts = buildCursorCommandParts(
+        prompt: prompt,
+        model: model,
+        outputFormat: "stream-json",
+        sessionId: sessionId,
+        workingDirectory: workingDirectory
+      )
     }
 
     let shellCommand =
@@ -934,7 +942,7 @@ struct ChatCLIProcessRunner {
         reportNotFoundAndRefreshShellEnvironment(tool: tool)
         continuation.yield(
           .error(
-            "\(toolName) CLI not found. Please install it and run '\(tool == .codex ? "codex login" : "claude login")' in Terminal."
+            "\(toolName) CLI not found. Please install it and run '\(tool.loginCommand)' in Terminal."
           ))
       } else if !stderr.isEmpty {
         continuation.yield(.error(stderr))
@@ -956,7 +964,79 @@ struct ChatCLIProcessRunner {
       return parseCodexEvent(data)
     case .claude:
       return parseClaudeEvent(data)
+    case .cursor:
+      return parseCursorEvent(data)
     }
+  }
+
+  /// Reads one `cursor-agent -p --output-format stream-json` line. Without
+  /// `--stream-partial-output` each `assistant` event is a whole message, so none repeat.
+  func parseCursorEvent(_ data: Data) -> ChatStreamEvent? {
+    guard
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let type = object["type"] as? String
+    else { return nil }
+
+    switch type {
+    case "system":
+      if let sessionId = object["session_id"] as? String, !sessionId.isEmpty {
+        return .sessionStarted(id: sessionId)
+      }
+    case "assistant":
+      guard
+        let message = object["message"] as? [String: Any],
+        let content = message["content"] as? [[String: Any]]
+      else { return nil }
+      let text = content.compactMap { part -> String? in
+        guard (part["type"] as? String) == "text" else { return nil }
+        return part["text"] as? String
+      }.joined()
+      return text.isEmpty ? nil : .textDelta(text)
+    case "tool_call":
+      let subtype = object["subtype"] as? String
+      if subtype == "started" {
+        let kind = (object["tool_call"] as? [String: Any])?.keys.sorted().first ?? "tool"
+        return .toolStart(command: kind)
+      }
+      if subtype == "completed" {
+        return .toolEnd(output: "", exitCode: nil)
+      }
+    case "result":
+      let result = object["result"] as? String ?? ""
+      if (object["is_error"] as? Bool) == true {
+        return .error(result.isEmpty ? "Cursor CLI could not complete the request." : result)
+      }
+      if !result.isEmpty {
+        return .complete(text: result)
+      }
+    default:
+      break
+    }
+    return nil
+  }
+
+  /// `cursor-agent -p` in Dayflow's working directory. `--force` lets it read the staged
+  /// screenshots without asking, and `--trust` skips the workspace trust prompt that would
+  /// otherwise block a headless run.
+  func buildCursorCommandParts(
+    prompt: String,
+    model: String?,
+    outputFormat: String,
+    sessionId: String?,
+    workingDirectory: URL
+  ) -> [String] {
+    var parts = [
+      CursorCLI.executableExpression, "-p", "--output-format", outputFormat, "--force",
+      "--trust", "--workspace", LoginShellRunner.shellEscape(workingDirectory.path),
+    ]
+    if let sessionId {
+      parts.append(contentsOf: ["--resume", LoginShellRunner.shellEscape(sessionId)])
+    }
+    if let model = CursorCLI.cliModel(from: model) {
+      parts.append(contentsOf: ["--model", LoginShellRunner.shellEscape(model)])
+    }
+    parts.append(LoginShellRunner.shellEscape(prompt))
+    return parts
   }
 
   func parseCodexEvent(_ data: Data) -> ChatStreamEvent? {
@@ -1230,7 +1310,7 @@ struct ChatCLIProcessRunner {
       }
     }
 
-    if tool == .claude, let envelope = parseClaudeJSONEnvelope(trimmed) {
+    if tool == .claude || tool == .cursor, let envelope = parseClaudeJSONEnvelope(trimmed) {
       return (envelope.text, envelope.usage)
     }
 
@@ -1487,6 +1567,9 @@ struct ChatCLIProcessRunner {
         LoginShellRunner.shellEscape($0.executableURL.path)
       } ?? toolName
 
+    var stagedCursorImages: CursorCLI.StagedImages?
+    defer { stagedCursorImages?.cleanup() }
+
     var cmdParts: [String] = [executableCommand]
     switch tool {
     case .codex:
@@ -1543,6 +1626,16 @@ struct ChatCLIProcessRunner {
         profile: claudeProfile,
         sessionMode: claudeSessionMode,
         usesInlineImages: !claudeInlineImages.isEmpty
+      )
+    case .cursor:
+      let staged = try CursorCLI.stageImages(imagePaths, in: workingDirectory)
+      stagedCursorImages = staged
+      cmdParts = buildCursorCommandParts(
+        prompt: CursorCLI.prompt(prompt, attaching: staged.relativePaths),
+        model: model,
+        outputFormat: "json",
+        sessionId: nil,
+        workingDirectory: workingDirectory
       )
     }
 
@@ -1717,7 +1810,7 @@ struct ChatCLIProcessRunner {
         domain: "ChatCLI", code: -2,
         userInfo: [
           NSLocalizedDescriptionKey:
-            "\(toolName) CLI not found. Please install it and run '\(tool == .codex ? "codex login" : "claude login")' in Terminal."
+            "\(toolName) CLI not found. Please install it and run '\(tool.loginCommand)' in Terminal."
         ])
     }
 

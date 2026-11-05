@@ -23,6 +23,8 @@ struct LLMProviderSetupView: View {
       return String(localized: "Connect ChatGPT")
     case .claude:
       return String(localized: "Connect Claude")
+    case .cursor:
+      return String(localized: "Connect Cursor")
     case .openAICompatible:
       return String(localized: "Connect an AI endpoint")
     case .gemini:
@@ -483,6 +485,14 @@ struct LLMProviderSetupView: View {
               } else if providerType == .chatGPT || providerType == .claude {
                 ChatCLITestView(
                   selectedTool: setupState.preferredCLITool,
+                  onTestComplete: { success in
+                    setupState.hasTestedConnection = true
+                    setupState.testSuccessful = success
+                  },
+                  usesOnboardingStyle: true
+                )
+              } else if providerType == .cursor {
+                CursorCLITestView(
                   onTestComplete: { success in
                     setupState.hasTestedConnection = true
                     setupState.testSuccessful = success

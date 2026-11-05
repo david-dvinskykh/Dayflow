@@ -291,6 +291,8 @@ struct OnboardingPrototypeChooseProviderStep: View {
       iconCircle(imageName: "ChatGPTLogo")
     case .claude:
       iconCircle(imageName: "ClaudeLogo")
+    case .cursor:
+      iconCircle(systemName: "cursorarrow.rays")
     case .gemini:
       iconCircle(imageName: "GeminiLogo")
     case .openAICompatible:

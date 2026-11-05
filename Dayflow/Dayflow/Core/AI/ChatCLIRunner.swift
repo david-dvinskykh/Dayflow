@@ -15,6 +15,7 @@ import Foundation
 enum ChatCLITool: String, Codable {
   case codex
   case claude
+  case cursor
 
   var providerID: LLMProviderID {
     switch self {
@@ -22,6 +23,17 @@ enum ChatCLITool: String, Codable {
       return .chatGPT
     case .claude:
       return .claude
+    case .cursor:
+      return .cursor
+    }
+  }
+
+  /// What the user runs in Terminal to sign the CLI in.
+  var loginCommand: String {
+    switch self {
+    case .codex: return "codex login"
+    case .claude: return "claude login"
+    case .cursor: return CursorCLI.loginCommand
     }
   }
 }

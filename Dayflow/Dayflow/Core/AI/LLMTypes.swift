@@ -86,6 +86,7 @@ enum LLMProviderID: String, Codable, CaseIterable {
   case gemini
   case chatGPT = "chatgpt"
   case claude
+  case cursor
   case openAICompatible = "openai_compatible"
   case local
 
@@ -95,7 +96,7 @@ enum LLMProviderID: String, Codable, CaseIterable {
       return "dayflow"
     case .gemini:
       return "gemini"
-    case .chatGPT, .claude:
+    case .chatGPT, .claude, .cursor:
       return "chat_cli"
     case .openAICompatible:
       return "openai_compatible"
@@ -110,6 +111,7 @@ enum LLMProviderID: String, Codable, CaseIterable {
     case .gemini: return "gemini"
     case .chatGPT: return "chatgpt"
     case .claude: return "claude"
+    case .cursor: return "cursor"
     case .openAICompatible: return "openai_compatible"
     case .local:
       return "local"
