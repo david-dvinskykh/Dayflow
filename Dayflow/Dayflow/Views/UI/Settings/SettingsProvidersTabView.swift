@@ -43,6 +43,8 @@ struct SettingsProvidersTabView: View {
       if viewModel.hasCodexOrClaudeProviderInRouting {
         agentPromptCustomizationSection
       }
+
+      CursorUsageSettingsSection()
     }
   }
 

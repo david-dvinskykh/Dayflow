@@ -720,6 +720,30 @@ extension StorageManager {
       }) ?? []
   }
 
+  /// Spans of Dayflow's agent CLI runs (Codex, Claude, Cursor) between two dates, used to
+  /// tell Dayflow's requests apart in an imported Cursor usage export.
+  func fetchChatCLICallWindows(from start: Date, to end: Date) -> [CursorUsageCallWindow] {
+    (try? db.read { db in
+      try Row.fetchAll(
+        db,
+        sql: """
+              SELECT created_at, latency_ms, model
+              FROM llm_calls
+              WHERE provider = 'chat_cli' AND created_at >= ? AND created_at <= ?
+          """,
+        arguments: [start, end]
+      ).compactMap { row -> CursorUsageCallWindow? in
+        guard let finishedAt: Date = row["created_at"] else { return nil }
+        let latencyMs: Int = row["latency_ms"] ?? 0
+        return CursorUsageCallWindow(
+          start: finishedAt.addingTimeInterval(-Double(max(0, latencyMs)) / 1000),
+          end: finishedAt,
+          model: row["model"]
+        )
+      }
+    }) ?? []
+  }
+
   func fetchRecentLLMCallsForDebug(limit: Int) -> [LLMCallDebugEntry] {
     guard limit > 0 else { return [] }
 
