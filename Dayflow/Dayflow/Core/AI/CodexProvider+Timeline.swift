@@ -10,6 +10,7 @@ extension CodexProvider {
 
   private static var timelineFrameMaxHeight: Int { 1080 }
   private static var timelineMaxAttempts: Int { 3 }
+  private static var cursorTimelineTimeoutSeconds: TimeInterval { 600 }
 
   /// One call that takes the batch's screenshots as attached images and writes the timeline
   /// cards, with no transcript in between. Observations are rebuilt from the cards' detail
@@ -172,6 +173,11 @@ extension CodexProvider {
     let runner = runner
     let tool = cliTool
     let workingDirectory = config.workingDirectory
+    // A Cursor timeline turn normally takes 2-3 minutes because the CLI uploads every frame
+    // to Cursor's servers; on a slow connection that overruns the default 5 minutes.
+    let timeout =
+      tool == .cursor
+      ? Self.cursorTimelineTimeoutSeconds : ChatCLIProcessRunner.Constants.timeoutSeconds
     // The frames go to the CLI as written; the shared image preparation would shrink them to
     // 720 pixels, which loses small on-screen text.
     return try await Task.detached(priority: .utility) {
@@ -181,7 +187,8 @@ extension CodexProvider {
         workingDirectory: workingDirectory,
         imagePaths: imagePaths,
         model: model,
-        reasoningEffort: reasoningEffort
+        reasoningEffort: reasoningEffort,
+        timeoutSeconds: timeout
       )
     }.value
   }
