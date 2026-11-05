@@ -97,36 +97,6 @@ struct HowItWorksView: View {
         Spacer()
 
         DayflowSurfaceButton(
-          action: {
-            GitHubStarPromptState.markDone()
-            Task {
-              let starred = await GitHubStarService.starDayflow()
-              if !starred {
-                NSWorkspace.shared.open(GitHubStarPromptState.repositoryURL)
-              }
-            }
-          },
-          content: {
-            HStack(spacing: 12) {
-              Image("GithubIcon").resizable().aspectRatio(contentMode: .fit).frame(
-                width: 20, height: 20
-              ).colorInvert()
-              Text("Star Dayflow on GitHub").font(.custom("Figtree", size: 14)).fontWeight(.medium)
-            }
-          },
-          background: Color(hex: "FF9F6F"),
-          foreground: .white,
-          borderColor: Color(hex: "F4C8B1"),
-          cornerRadius: 200,
-          horizontalPadding: 24,
-          verticalPadding: 12,
-          showOverlayStroke: false,
-          innerGlowColor: Color(hex: "FFDCCB").opacity(0.9)
-        )
-
-        Spacer()
-
-        DayflowSurfaceButton(
           action: onNext,
           content: {
             HStack(spacing: 6) {

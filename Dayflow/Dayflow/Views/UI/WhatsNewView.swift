@@ -250,10 +250,6 @@ struct WhatsNewView: View {
           .keyboardShortcut(.cancelAction)
         }
 
-        if let githubStar = releaseNote.githubStar {
-          githubStarSection(githubStar)
-        }
-
         if !releaseNote.highlights.isEmpty {
           VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(releaseNote.highlights.enumerated()), id: \.offset) { _, highlight in
@@ -276,10 +272,6 @@ struct WhatsNewView: View {
           Label(betaSignup.followUp, systemImage: "chart.bar.xaxis")
             .font(.custom("Figtree", size: 13))
             .foregroundColor(.black.opacity(0.58))
-        }
-
-        if releaseNote.showsWeeklyFeedbackSurvey {
-          surveySection
         }
 
         if let socialPreview = releaseNote.socialPreview {
@@ -320,10 +312,6 @@ struct WhatsNewView: View {
           .padding(.horizontal, -36)
         }
 
-        if let betaSignup = releaseNote.betaSignup {
-          agentsBetaSignupSection(betaSignup)
-        }
-
         if let cta = releaseNote.cta {
           ctaSection(cta)
         }
@@ -351,10 +339,6 @@ struct WhatsNewView: View {
       if releaseNote.betaSignup != nil && agentsBetaResponseID.isEmpty {
         agentsBetaResponseID = loadResponseID(for: agentsBetaSurveyKey)
       }
-    }
-    .task {
-      guard releaseNote.githubStar != nil else { return }
-      await checkGitHubStarStatus()
     }
     .environment(\.colorScheme, .light)
     .preferredColorScheme(.light)
@@ -706,164 +690,12 @@ struct WhatsNewView: View {
     .padding(.top, 6)
   }
 
-  // MARK: - GitHub star prompt
-
-  /// Hidden once we know the user already starred the repo; nothing to ask for.
-  @ViewBuilder
-  private func githubStarSection(_ prompt: ReleaseNoteGitHubStar) -> some View {
-    if githubStarState != .checking && githubStarState != .starred {
-      VStack(alignment: .leading, spacing: 16) {
-        HStack(alignment: .top, spacing: 14) {
-          Image(systemName: "star.fill")
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundColor(Color(red: 0.25, green: 0.17, blue: 0))
-            .padding(.top, 2)
-
-          VStack(alignment: .leading, spacing: 6) {
-            Text(prompt.title)
-              .font(.custom("InstrumentSerif-Regular", size: 26))
-              .foregroundColor(.black.opacity(0.9))
-
-            Text(prompt.description)
-              .font(.custom("Figtree", size: 15))
-              .foregroundColor(.black.opacity(0.72))
-              .fixedSize(horizontal: false, vertical: true)
-          }
-        }
-
-        if githubStarState == .starred {
-          Label("Starred. Thank you!", systemImage: "checkmark.circle.fill")
-            .font(.custom("Figtree", size: 16))
-            .fontWeight(.semibold)
-            .foregroundColor(Color(red: 0.25, green: 0.17, blue: 0))
-        } else {
-          DayflowSurfaceButton(
-            action: handleGitHubStarTap,
-            content: {
-              HStack(spacing: 10) {
-                Image(systemName: "star.fill")
-                  .font(.system(size: 14, weight: .semibold))
-                Text(
-                  githubStarState == .starring
-                    ? String(localized: "Starring...") : String(localized: "Star on GitHub")
-                )
-                .font(.custom("Figtree", size: 16))
-                .fontWeight(.semibold)
-              }
-            },
-            background: Color(red: 0.25, green: 0.17, blue: 0),
-            foreground: .white,
-            borderColor: .clear,
-            cornerRadius: 10,
-            horizontalPadding: 22,
-            verticalPadding: 13,
-            showOverlayStroke: true
-          )
-          .disabled(githubStarState == .starring)
-          .opacity(githubStarState == .starring ? 0.72 : 1)
-          .pointingHandCursor()
-        }
-      }
-      .padding(22)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(Color(red: 0.985, green: 0.975, blue: 0.955))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(Color(red: 0.25, green: 0.17, blue: 0).opacity(0.14), lineWidth: 1)
-      )
-      .padding(.top, 8)
-    }
-  }
-
-  private func checkGitHubStarStatus() async {
-    let check = await Task.detached(priority: .utility) {
-      GitHubStarPrompt.check()
-    }.value
-
-    let status: GitHubStarStatus =
-      check.starredByRepo[GitHubStarPrompt.primaryRepoName] == true ? .starred : check.status
-    switch status {
-    case .starred:
-      githubStarState = .starred
-      githubStarOutcome = "already_starred"
-      GitHubStarPromptState.markDone()
-    case .notStarred:
-      githubStarState = .readyToStar
-      githubStarOutcome = "shown_not_clicked"
-    case .unavailable:
-      githubStarState = .browser
-      githubStarOutcome = "shown_not_clicked"
-    }
-
-    var props = check.analyticsProperties
-    props["version"] = releaseNote.version
-    props["prompt_shown"] = status != .starred
-    props["provider_label"] = currentProviderLabel
-    AnalyticsService.shared.capture("whats_new_github_star_checked", props)
-  }
-
-  private func handleGitHubStarTap() {
-    switch githubStarState {
-    case .readyToStar:
-      captureGitHubStarClick(method: "gh")
-      starViaGitHubCLI()
-    case .browser:
-      captureGitHubStarClick(method: "browser")
-      openGitHubRepoInBrowser(outcome: "browser_opened")
-    case .checking, .starring, .starred:
-      break
-    }
-  }
-
-  private func captureGitHubStarClick(method: String) {
-    // Any click ends the recurring star reminder.
-    GitHubStarPromptState.markDone()
-    AnalyticsService.shared.capture(
-      "whats_new_github_star_clicked",
-      [
-        "version": releaseNote.version,
-        "method": method,
-        "provider_label": currentProviderLabel,
-      ])
-  }
-
-  private func starViaGitHubCLI() {
-    githubStarState = .starring
-
-    Task {
-      let result = await Task.detached(priority: .userInitiated) {
-        GitHubStarPrompt.starAll()
-      }.value
-
-      var props = result.analyticsProperties
-      props["version"] = releaseNote.version
-      props["provider_label"] = currentProviderLabel
-      AnalyticsService.shared.capture("whats_new_github_star_result", props)
-
-      if result.primaryStarred {
-        githubStarState = .starred
-        githubStarOutcome = "starred_via_gh"
-      } else {
-        // The click shouldn't be wasted: fall back to the browser.
-        githubStarState = .browser
-        openGitHubRepoInBrowser(outcome: "gh_failed_browser_opened")
-      }
-    }
-  }
-
-  private func openGitHubRepoInBrowser(outcome: String) {
-    githubStarOutcome = outcome
-    openURL(GitHubStarPrompt.primaryRepoURL)
-  }
-
   /// Shows the live X embed, with the hand-drawn card as a fallback if the
   /// widget can't load (offline, script blocked, or 10s timeout).
   @ViewBuilder
   private func socialPreviewSection(_ preview: ReleaseNoteSocialPreview) -> some View {
-    if tweetEmbedState == .failed {
+    // The live X embed loaded platform.twitter.com; this build shows the local card only.
+    if true {
       socialPreviewCard(preview)
     } else {
       ZStack(alignment: .topLeading) {
@@ -1223,32 +1055,11 @@ private struct ReleaseSurveyPayload: Encodable {
   }
 }
 
+/// Release surveys used to be posted to the Dayflow backend. This build sends nothing,
+/// and the survey sections are no longer shown.
 private enum ReleaseSurveyClient {
   static func submit(_ payload: ReleaseSurveyPayload) async throws {
-    guard let url = releaseSurveyURL() else {
-      throw URLError(.badURL)
-    }
-
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONEncoder().encode(payload)
-
-    let (_, response) = try await URLSession.shared.data(for: request)
-    guard let httpResponse = response as? HTTPURLResponse,
-      (200..<300).contains(httpResponse.statusCode)
-    else {
-      throw URLError(.badServerResponse)
-    }
-  }
-
-  private static func releaseSurveyURL() -> URL? {
-    guard let endpoint = resolvedEndpoint() else { return nil }
-    return URL(string: "\(endpoint)/v1/release-survey")
-  }
-
-  private static func resolvedEndpoint() -> String? {
-    DayflowBackendConfiguration.endpoint()
+    throw URLError(.unsupportedURL)
   }
 }
 

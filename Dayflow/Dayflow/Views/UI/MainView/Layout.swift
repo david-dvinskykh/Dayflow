@@ -57,9 +57,8 @@ extension MainView {
           InactivityMonitor.shared.markHandledIfPending()
         }
       }
-      .onChange(of: selectedIcon) { oldIcon, newIcon in
+      .onChange(of: selectedIcon) { _, newIcon in
         handleTabSelectionChange(newIcon)
-        keepFlowAlive(leaving: oldIcon, entering: newIcon)
       }
       .onChange(of: selectedDate) { _, newDate in
         handleSelectedDateChange(newDate)
@@ -784,23 +783,5 @@ private struct ScreenRecordingPermissionNoticeView: View {
         .stroke(theme.popoverBorder, lineWidth: 1)
     )
     .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
-  }
-}
-
-extension MainView {
-  /// Keeps Flow loaded for `flowKeepAlive` after the user leaves its tab, then lets it go.
-  func keepFlowAlive(leaving oldIcon: SidebarIcon, entering newIcon: SidebarIcon) {
-    if newIcon == .flow {
-      flowTeardown?.cancel()
-      flowTeardown = nil
-      flowAlive = true
-    } else if oldIcon == .flow {
-      flowTeardown?.cancel()
-      flowTeardown = Task { @MainActor in
-        try? await Task.sleep(for: MainView.flowKeepAlive)
-        guard !Task.isCancelled, selectedIcon != .flow else { return }
-        flowAlive = false
-      }
-    }
   }
 }

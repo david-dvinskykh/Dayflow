@@ -24,8 +24,7 @@ struct DebugLogSnapshot {
 
     let batches = StorageManager.shared.fetchRecentAnalysisBatchesForDebug(limit: 5)
     let text =
-      AgentPlaybackDiagnostics.snapshot() + "\n\n"
-      + ShellEnvironment.shared.diagnosticsText() + "\n\n"
+      ShellEnvironment.shared.diagnosticsText() + "\n\n"
       + DebugLogFormatter.makeLog(timeline: timeline, llmCalls: llmCalls, batches: batches)
 
     return DebugLogSnapshot(
@@ -200,27 +199,5 @@ struct DebugLogFormatter {
     let components = value.components(separatedBy: .whitespacesAndNewlines)
     let trimmed = components.filter { !$0.isEmpty }.joined(separator: " ")
     return trimmed.isEmpty ? nil : trimmed
-  }
-}
-
-/// Bounded local failure history, shared only through the existing support-log attachment flow.
-enum AgentPlaybackDiagnostics {
-  private static let key = "agentPlaybackFailureDiagnostics"
-
-  static func record(message: String, output: String, properties: [String: Any]) {
-    let metadata = properties.keys.sorted().map { "\($0)=\(properties[$0]!)" }
-      .joined(separator: "\n")
-    let entry =
-      "\(ISO8601DateFormatter().string(from: Date()))\n\(metadata)\n\(message)\nOutput tail:\n\(output.suffix(4000))"
-      .replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
-    var entries = UserDefaults.standard.stringArray(forKey: key) ?? []
-    entries.append(String(entry.suffix(8000)))
-    UserDefaults.standard.set(Array(entries.suffix(3)), forKey: key)
-  }
-
-  static func snapshot() -> String {
-    let entries = UserDefaults.standard.stringArray(forKey: key) ?? []
-    return "--- Agents startup/runtime failures (latest 3, local) ---\n"
-      + (entries.isEmpty ? "None recorded." : entries.joined(separator: "\n\n"))
   }
 }

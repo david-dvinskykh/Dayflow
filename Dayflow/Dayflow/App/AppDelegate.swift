@@ -13,8 +13,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   enum PendingNotificationNavigationDestination: Equatable {
     case daily(day: String?)
     case weekly
-    case support
-    case flow
     case timeline
   }
 
@@ -66,9 +64,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Block termination by default; only specific flows enable it.
     AppDelegate.allowTermination = false
     applySavedDockIconPreference()
-    #if DEBUG
-      if #available(macOS 15.0, *) { FlowDebugRecorder.shared.install() }
-    #endif
 
     // No crash reporting or analytics in this build: nothing leaves the Mac.
 
@@ -176,15 +171,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Start Daily and Weekly notifications and retire legacy Journal reminders
     NotificationService.shared.start()
     DayflowAuthManager.shared.loadStoredSessionIfNeeded()
-    SupportChatSession.shared.start()
-    SupportChatSession.startFlowWaitlistMonitoring()
 
     // Start daily recap generation scheduler (checks every 5 minutes)
     DailyRecapScheduler.shared.start()
 
-    // Flow desktop overlay (creature toasts/nudges) tracks the session mirror
-    FlowOverlayController.shared.start()
-    FlowEarlyBirdController.shared.start()
     DailyBriefMenuBarNotice.shared.start()
 
     // Observe recording state

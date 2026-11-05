@@ -69,38 +69,21 @@ extension MainView {
           .padding(15)
       case .chat:
         ChatPanelView()
-      case .flow:
-        Color.clear
-      case .agents:
-        AgentPlaybackView()
       case .daily:
         DailyView(selectedDate: $selectedDate)
       case .weekly:
         WeeklyView()
-      case .bug:
-        BugReportView()
-          .padding(15)
       case .timeline:
         GeometryReader { geo in
           timelinePanel(geo: geo)
         }
-      }
-
-      // Outside the switch so it keeps its web view while another tab shows.
-      if flowAlive || selectedIcon == .flow {
-        FlowView()
-          .opacity(selectedIcon == .flow ? 1 : 0)
-          .allowsHitTesting(selectedIcon == .flow)
-          .accessibilityHidden(selectedIcon != .flow)
       }
     }
     .padding(0)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     .background {
-      if selectedIcon != .agents || !theme.isDark {
-        mainPanelBackground
-      }
+      mainPanelBackground
     }
   }
 
